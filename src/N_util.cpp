@@ -1,0 +1,151 @@
+#include "N_util.h"
+#include <M5StackUpdater.h>
+#include <WiFi.h>          // Added for WiFi.mode(WIFI_OFF)
+
+static SPIClass SPI2;
+bool SD_ENABLE;
+// ----- Cardputer Specific disp paramaters -----------
+const int32_t N_COLS = 20; // columns
+const int32_t N_ROWS = 6;  // rows
+//---- caluculated in m5stackc_begin() ----------------
+int32_t W_CHR, H_CHR;             // Character dimensions
+int32_t X_WIDTH, Y_HEIGHT;        // Screen dimensions
+int32_t SC_LINES[N_ROWS];         // Array to store Y coordinates of each line
+
+void m5stack_begin()
+{
+  auto cfg = M5.config();
+  cfg.serial_baudrate = 115200; // Serial communication speed
+  cfg.internal_imu = false;     // Do not use IMU (accelerometer/gyroscope)
+  cfg.internal_mic = false;     // Do not use microphone
+  cfg.output_power = false;     // Disable Grove port power output
+  cfg.led_brightness = 0;
+  M5Cardputer.begin(cfg, true);
+  M5Cardputer.Speaker.setVolume(0);
+
+#ifdef DEBUG
+  // vsCode terminal cannot get serial data
+  //  of cardputer before 5 sec ...!
+  delay(5000);
+#endif
+  // Disable Wi-Fi and Bluetooth to save power as they are not used.
+  WiFi.mode(WIFI_OFF);
+  btStop();
+  dbPrtln("Wi-Fi and Bluetooth disabled.");
+
+  dbPrtln("\n\n*** m5stack begin ***");
+
+  // Reduce power consumption by lowering CPU frequency (e.g., 80MHz)
+  if (setCpuFrequencyMhz(80))
+  {
+    dbPrtln("CPU Freq set to: " + String(getCpuFrequencyMhz()) + " MHz");
+  }
+
+  // Calculate Cardputer specific display scale parameters
+  X_WIDTH = M5Cardputer.Display.width();
+  Y_HEIGHT = M5Cardputer.Display.height();
+  W_CHR = X_WIDTH / N_COLS;  // width of 1 character
+  H_CHR = Y_HEIGHT / N_ROWS; // height of 1 character
+  for (int i = 0; i < N_ROWS; ++i)
+  {
+    SC_LINES[i] = i * H_CHR;
+  }
+
+  // display setup at startup
+  M5Cardputer.Display.fillScreen(TFT_BLACK);
+  M5Cardputer.Display.setBrightness(BRIGHT_NORMAL);
+  M5Cardputer.Display.setRotation(1);
+  M5Cardputer.Display.setFont(&fonts::Font0);
+  M5Cardputer.Display.setTextSize(2);
+  M5Cardputer.Display.setTextDatum(top_left); // character base position
+  M5Cardputer.Display.setTextWrap(false);
+  M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  M5Cardputer.Display.setCursor(0, 0);
+
+  // SPI setup for using SD card
+  SPI2.begin(
+      M5.getPin(m5::pin_name_t::sd_spi_sclk),
+      M5.getPin(m5::pin_name_t::sd_spi_miso),
+      M5.getPin(m5::pin_name_t::sd_spi_mosi),
+      M5.getPin(m5::pin_name_t::sd_spi_ss));
+
+  SD_ENABLE = SD_begin();
+}
+
+// ------------------------------------------------------------------------
+// SDU_lobby :  lobby for M5Stack-SD-Updater
+// ------------------------------------------------------------------------
+// load '/menu.bin' on SD, if key'a' pressed at booting.
+// 'menu.bin' for Cardputer is involved in BINS folder at this github site
+// https://github.com/NoRi-230401/tiny-usbKeyboard-Cardputer
+//
+// ------------------------------------------------------------------------
+// ** M5Stack-SD-Updater is launcher software for m5stak by tobozo **
+// https://github.com/tobozo/M5Stack-SD-Updater/
+// ------------------------------------------------------------------------
+void SDU_lobby()
+{
+  M5Cardputer.update();
+  if (M5Cardputer.Keyboard.isKeyPressed('a'))
+  {
+    updateFromFS(SD, "/menu.bin");
+    ESP.restart();
+    // *** NEVER RETURN ***
+  }
+
+  dbPrtln("SDU_lobby exit");
+}
+
+bool SD_begin()
+{
+  for (int i = 0; i < 10; ++i)
+  {
+    if (SD.begin(M5.getPin(m5::pin_name_t::sd_spi_ss), SPI2))
+    {
+      return true; // Success
+    }
+    delay(500);
+  }
+
+  dbPrtln("ERR: SD begin fail...");
+  SD.end();
+  return false; // Failed after retries
+}
+
+void dbPrtln(String msg)
+{
+#ifdef DEBUG
+  Serial.println(msg);
+  Serial.flush();
+#endif
+  ;
+}
+
+void dbPrt(String msg)
+{
+#ifdef DEBUG
+  Serial.print(msg);
+  // Serial.flush();
+#endif
+  ;
+}
+
+void dispLx(uint8_t Lx, const char *msg)
+{
+  //*********** Lx is (0 to N_ROWS - 1) *************************
+  if (Lx >= N_ROWS)
+    return;
+
+  M5Cardputer.Display.fillRect(0, SC_LINES[Lx], X_WIDTH, H_CHR, TFT_BLACK);
+  M5Cardputer.Display.setCursor(0, SC_LINES[Lx]);
+  M5Cardputer.Display.print(msg);
+}
+
+
+void POWER_OFF()
+{
+  dbPrtln(" *** POWER OFF ***");
+  delay(5 * 1000L);
+  M5.Power.powerOff();
+  // never return 
+}

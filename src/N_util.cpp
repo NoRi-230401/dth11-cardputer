@@ -5,8 +5,11 @@
 static SPIClass SPI2;
 bool SD_ENABLE;
 // ----- Cardputer Specific disp paramaters -----------
-const int32_t N_COLS = 20; // columns
-const int32_t N_ROWS = 6;  // rows
+// const int32_t N_COLS = 20; // columns
+// const int32_t N_ROWS = 6;  // rows
+const int32_t N_COLS = 30; // columns
+const int32_t N_ROWS = 8;  // rows
+
 //---- caluculated in m5stackc_begin() ----------------
 int32_t W_CHR, H_CHR;             // Character dimensions
 int32_t X_WIDTH, Y_HEIGHT;        // Screen dimensions
@@ -41,6 +44,22 @@ void m5stack_begin()
     dbPrtln("CPU Freq set to: " + String(getCpuFrequencyMhz()) + " MHz");
   }
 
+
+  // display setup at startup
+  M5Cardputer.Display.fillScreen(TFT_BLACK);
+  M5Cardputer.Display.setBrightness(BRIGHT_NORMAL);
+  M5Cardputer.Display.setRotation(1);
+  // M5Cardputer.Display.setFont(&fonts::Font0);
+  // M5Cardputer.Display.setTextSize(2);
+  M5Cardputer.Display.setFont(&fonts::lgfxJapanGothic_16);
+	// M5Cardputer.Display.print("ゴシック体 16 Hello World\nこんにちは世界\n");
+
+  M5Cardputer.Display.setTextDatum(top_left); // character base position
+  M5Cardputer.Display.setTextWrap(false);
+  M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  M5Cardputer.Display.setCursor(0, 0);
+
+
   // Calculate Cardputer specific display scale parameters
   X_WIDTH = M5Cardputer.Display.width();
   Y_HEIGHT = M5Cardputer.Display.height();
@@ -51,16 +70,6 @@ void m5stack_begin()
     SC_LINES[i] = i * H_CHR;
   }
 
-  // display setup at startup
-  M5Cardputer.Display.fillScreen(TFT_BLACK);
-  M5Cardputer.Display.setBrightness(BRIGHT_NORMAL);
-  M5Cardputer.Display.setRotation(1);
-  M5Cardputer.Display.setFont(&fonts::Font0);
-  M5Cardputer.Display.setTextSize(2);
-  M5Cardputer.Display.setTextDatum(top_left); // character base position
-  M5Cardputer.Display.setTextWrap(false);
-  M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  M5Cardputer.Display.setCursor(0, 0);
 
   // SPI setup for using SD card
   SPI2.begin(

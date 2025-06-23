@@ -7,6 +7,7 @@ void dispInit();
 void prtTempValue(float temp_val);
 void prtHumiValue(float humi_val);
 void battery_check();
+void batDisp(uint8_t batLvl);
 void batLow_check(uint8_t batLvl);
 
 #include <Adafruit_Sensor.h>
@@ -18,6 +19,7 @@ void batLow_check(uint8_t batLvl);
 // #define DHTTYPE    DHT22     // DHT 22 (AM2302)
 // #define DHTTYPE    DHT21     // DHT 21 (AM2301)
 DHT_Unified dht(DHTPIN, DHTTYPE);
+static unsigned long DTH11_CHECK_INTERVAL_MS = 1 * 1000UL;
 
 void setup()
 {
@@ -31,10 +33,10 @@ void setup()
 
   // Initialize device.
   dht.begin();
+  sensor_t sensor;
 
 #ifdef DEBUG
   // Print temperature sensor details.
-  sensor_t sensor;
   dht.temperature().getSensor(&sensor);
   Serial.println(F("------------------------------------"));
   Serial.println(F("Temperature Sensor"));
@@ -76,6 +78,7 @@ void setup()
   Serial.println(F("------------------------------------"));
 #endif
 
+  DTH11_CHECK_INTERVAL_MS = sensor.min_delay / 1000UL;
   dispInit();
 }
 
@@ -89,7 +92,6 @@ void loop()
 static unsigned long PREV_DTH11_TM = 0L;
 void dth11_sensor()
 {
-  const unsigned long DTH11_CHECK_INTERVAL_MS = 1 * 1000UL;
   unsigned long currentTime = millis(); // Get current time once
 
   if (currentTime - PREV_DTH11_TM < DTH11_CHECK_INTERVAL_MS)
@@ -127,37 +129,47 @@ void dth11_sensor()
   }
 }
 
+#define BATLVL_COL 22
+#define TEMP_COL 3
+#define HUMI_COL 19
+
 void dispInit()
 {
-  // ---01234567890123456789
-  // L0:--  DTH11 Sensor  --
-  // L1:           bat. 78%
+  // ---012345678901234567890123456789----
+  // L0:-- DTH11 Sensor --    bat.---%
+  // L1:
   // L2:
-  // L3: Temp.   : xx.x deg
+  // L3:
   // L4:
-  // L5: Humidity: xx.x %
-  // ---01234567890123456789
+  // L5:
+  // L6:
+  // L7:   気温　℃         湿度　％
+  // ---012345678901234567890123456789----
 
+  M5Cardputer.Display.fillScreen(TFT_BLACK); // 画面塗り潰し
   M5Cardputer.Display.setTextColor(TFT_SKYBLUE, TFT_BLACK);
   M5Cardputer.Display.setCursor(0, 0);
-  M5Cardputer.Display.print(F("--  DTH11 Sensor  --"));
+  //--------------------------"012345678901234567890123456789"------------------;
+  M5Cardputer.Display.print(F("-- DTH11 Sensor --"));
 
-  //  L1 :Battery Level ---------------------------------------
-  //------------------"01234567890123456789"------------------;
-  const char *L1Str = "            bat.---%";
+  //  L0 :Battery Level ---------------------------------------
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  dispLx(1, L1Str);
+  M5Cardputer.Display.setCursor(W_CHR * BATLVL_COL, SC_LINES[0]);
+  M5Cardputer.Display.print(F("bat.---%"));
 
   M5Cardputer.Display.setTextColor(TFT_ORANGE, TFT_BLACK);
-  M5Cardputer.Display.setCursor(0, SC_LINES[3]);
-  //--------------------------"01234567890123456789"--;
-  M5Cardputer.Display.print(F(" Temp.   : --.- deg "));
+  M5Cardputer.Display.setCursor(W_CHR * TEMP_COL, SC_LINES[7]);
+  //--------------------------"012345678901234567890123456789"--;
+  M5Cardputer.Display.print(F("気温　℃"));
 
   M5Cardputer.Display.setTextColor(TFT_GREEN, TFT_BLACK);
-  M5Cardputer.Display.setCursor(0, SC_LINES[5]);
-  //--------------------------"01234567890123456789"------------------;
-  M5Cardputer.Display.print(F(" Humidity: --.- %   "));
+  M5Cardputer.Display.setCursor(W_CHR * HUMI_COL, SC_LINES[7]);
+  //----------"012345678901234567890123456789"--;
+  M5Cardputer.Display.print(F("湿度　％"));
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+
+  M5Cardputer.Display.setFont(&fonts::Font6);
+  M5Cardputer.Display.setTextSize(1);
 }
 
 void updateFloatValueDisplay(float currentValue, float &previousValue, uint8_t lineIndex, uint8_t column, uint8_t widthChars)
@@ -180,6 +192,8 @@ void updateFloatValueDisplay(float currentValue, float &previousValue, uint8_t l
     snprintf(buf, sizeof(buf), "%2.1f", currentValue);
   }
 
+  M5Cardputer.Display.setTextSize(1);
+  // M5Cardputer.Display.setTextSize(3);
   M5Cardputer.Display.fillRect(W_CHR * column, SC_LINES[lineIndex], W_CHR * widthChars, H_CHR, TFT_BLACK);
   M5Cardputer.Display.setCursor(W_CHR * column, SC_LINES[lineIndex]);
   M5Cardputer.Display.print(buf);
@@ -188,13 +202,13 @@ void updateFloatValueDisplay(float currentValue, float &previousValue, uint8_t l
 static float prev_temp = 0.0;
 void prtTempValue(float temp_val)
 {
-  updateFloatValueDisplay(temp_val, prev_temp, 3, 11, 4);
+  updateFloatValueDisplay(temp_val, prev_temp, 3, 1, 4);
 }
 
 static float prev_humi = 0.0;
 void prtHumiValue(float humi_val)
 {
-  updateFloatValueDisplay(humi_val, prev_humi, 5, 11, 4);
+  updateFloatValueDisplay(humi_val, prev_humi, 3, 17, 4);
 }
 
 static unsigned long PREV_BATCHK_TM = 0L;
@@ -203,7 +217,7 @@ static bool batChk_first = true;
 
 void battery_check()
 {
-  const unsigned long BATCHK_INTVAL = 1900UL;
+  const unsigned long BATCHK_INTVAL = 1993UL;
   unsigned long currentTime = millis(); // Get current time once
 
   if (currentTime - PREV_BATCHK_TM < BATCHK_INTVAL)
@@ -237,19 +251,25 @@ void battery_check()
   }
   PREV_BATLVL = batLvl;
 
-  // Line1 : battery level display
-  //---- 01234567890123456789---
-  // L1_"            bat.100%"--
-  //---- 01234567890123456789---
-  const int COL_BATVAL = 16;      // Battery value display start position
-  const int WIDTH_BATVAL_LEN = 3; // Battery value display length
+  batDisp(batLvl);
+}
 
-  M5Cardputer.Display.fillRect(W_CHR * COL_BATVAL, SC_LINES[1], W_CHR * WIDTH_BATVAL_LEN, H_CHR, TFT_BLACK);
-  M5Cardputer.Display.setCursor(W_CHR * COL_BATVAL, SC_LINES[1]);
+void batDisp(uint8_t batLvl)
+{
+  // Line0 : battery level display
+  //---- 012345678901234567890123456789---
+  // L0_"                      bat.xxx%"--
+  const int BATVAL_POS = 26; // Battery value display start position
+  const int BATVAL_LEN = 3;  // Battery value display length
+
+  // clear
+  M5Cardputer.Display.fillRect(W_CHR * BATVAL_POS, SC_LINES[0], W_CHR * BATVAL_LEN, H_CHR, TFT_BLACK);
+
+  M5Cardputer.Display.setTextSize(0.3);
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-
-  char batLvlBuf[4];                                     // Buffer for "XXX" + null terminator
-  snprintf(batLvlBuf, sizeof(batLvlBuf), "%3u", batLvl); // %3u pads with spaces if less than 3 digits
+  char batLvlBuf[4]; // Buffer for "XXX" + null terminator
+  M5Cardputer.Display.setCursor(W_CHR * BATVAL_POS, SC_LINES[0] + 3);
+  snprintf(batLvlBuf, sizeof(batLvlBuf), "%3u", batLvl);
   M5Cardputer.Display.print(batLvlBuf);
 }
 

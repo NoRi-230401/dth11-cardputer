@@ -8,7 +8,7 @@ void prtTempValue(float temp_val);
 void prtHumiValue(float humi_val);
 void battery_check();
 void batDisp(uint8_t batLvl);
-void batLow_check(uint8_t batLvl);
+void lowBatteryCheck(uint8_t batLvl);
 
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
@@ -193,8 +193,7 @@ void updateFloatValueDisplay(float currentValue, float &previousValue, uint8_t l
   }
 
   M5Cardputer.Display.setTextSize(1);
-  // M5Cardputer.Display.setTextSize(3);
-  M5Cardputer.Display.fillRect(W_CHR * column, SC_LINES[lineIndex], W_CHR * widthChars, H_CHR, TFT_BLACK);
+  M5Cardputer.Display.fillRect(W_CHR * column, SC_LINES[lineIndex], W_CHR * widthChars, H_CHR * 4, TFT_BLACK);
   M5Cardputer.Display.setCursor(W_CHR * column, SC_LINES[lineIndex]);
   M5Cardputer.Display.print(buf);
 }
@@ -202,13 +201,13 @@ void updateFloatValueDisplay(float currentValue, float &previousValue, uint8_t l
 static float prev_temp = 0.0;
 void prtTempValue(float temp_val)
 {
-  updateFloatValueDisplay(temp_val, prev_temp, 3, 1, 4);
+  updateFloatValueDisplay(temp_val, prev_temp, 3, 1, 13);
 }
 
 static float prev_humi = 0.0;
 void prtHumiValue(float humi_val)
 {
-  updateFloatValueDisplay(humi_val, prev_humi, 3, 17, 4);
+  updateFloatValueDisplay(humi_val, prev_humi, 3, 17, 13);
 }
 
 static unsigned long PREV_BATCHK_TM = 0L;
@@ -221,9 +220,7 @@ void battery_check()
   unsigned long currentTime = millis(); // Get current time once
 
   if (currentTime - PREV_BATCHK_TM < BATCHK_INTVAL)
-  {
     return;
-  }
 
   // This will update consecutiveLowBatteryCount
   PREV_BATCHK_TM = currentTime;
@@ -232,25 +229,14 @@ void battery_check()
   if (batLvl > 100)
     batLvl = 100;
 
-  batLow_check(batLvl);
+  lowBatteryCheck(batLvl);
 
   if (batChk_first)
-  {
     batChk_first = false;
-  }
-  else
-  {
-    if (abs(batLvl - PREV_BATLVL) > 5)
-    {
-      PREV_BATLVL = batLvl;
-      return;
-    }
+  else if( (batLvl == PREV_BATLVL) || (abs(batLvl - PREV_BATLVL) > 5))
+    return;
 
-    if (batLvl == PREV_BATLVL)
-      return;
-  }
   PREV_BATLVL = batLvl;
-
   batDisp(batLvl);
 }
 
@@ -274,15 +260,16 @@ void batDisp(uint8_t batLvl)
 }
 
 static uint8_t consecutiveLowBatteryCount = 0;
-void batLow_check(uint8_t batLvl)
+void lowBatteryCheck(uint8_t batLvl)
 {
-  const uint8_t LOW_BATTERY_LEVEL_THRESHOLD = 10; // % : define LOW BATTERY lvl
-  const uint8_t LOW_BATTERY_CONSECUTIVE_READINGS = 5;
-
+  const uint8_t LOWBAT_LVL_THRESHOLD = 10; // % : define LOW BATTERY lvl
+  const uint8_t LOWBAT_CONSECUTIVE_READINGS = 5;
+  const int LOWBAT_DISP_COL = 45;
+  
   // Update consecutive low battery count
-  if (batLvl < LOW_BATTERY_LEVEL_THRESHOLD)
+  if (batLvl < LOWBAT_LVL_THRESHOLD)
   {
-    if (consecutiveLowBatteryCount < LOW_BATTERY_CONSECUTIVE_READINGS)
+    if (consecutiveLowBatteryCount < LOWBAT_CONSECUTIVE_READINGS)
     { // Avoid overflow if already at max
       consecutiveLowBatteryCount++;
     }
@@ -290,16 +277,17 @@ void batLow_check(uint8_t batLvl)
   else
   {
     consecutiveLowBatteryCount = 0; // Reset if battery level is acceptable
+    return;
   }
 
-  // Check for Low Battery condition first (highest priority)
-  if (consecutiveLowBatteryCount >= LOW_BATTERY_CONSECUTIVE_READINGS)
+  if (consecutiveLowBatteryCount >= LOWBAT_CONSECUTIVE_READINGS)
   {
     M5Cardputer.Display.fillScreen(TFT_BLACK);
-    M5Cardputer.Display.setCursor(0, SC_LINES[3]);
+    M5Cardputer.Display.setFont(&fonts::Font4);
+    M5Cardputer.Display.setTextSize(1);
+    M5Cardputer.Display.setCursor( LOWBAT_DISP_COL , SC_LINES[3]);
     M5Cardputer.Display.setTextColor(TFT_RED, TFT_BLACK);
-    M5Cardputer.Display.print("    LOW BATTERY !!  ");
-    //========================"01234567890123456789"---
+    M5Cardputer.Display.print(F("Low Battery !!"));
     POWER_OFF();
     // never return
   }

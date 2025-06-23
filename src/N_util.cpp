@@ -44,21 +44,16 @@ void m5stack_begin()
     dbPrtln("CPU Freq set to: " + String(getCpuFrequencyMhz()) + " MHz");
   }
 
-
   // display setup at startup
   M5Cardputer.Display.fillScreen(TFT_BLACK);
   M5Cardputer.Display.setBrightness(BRIGHT_NORMAL);
   M5Cardputer.Display.setRotation(1);
-  // M5Cardputer.Display.setFont(&fonts::Font0);
-  // M5Cardputer.Display.setTextSize(2);
   M5Cardputer.Display.setFont(&fonts::lgfxJapanGothic_16);
-	// M5Cardputer.Display.print("ゴシック体 16 Hello World\nこんにちは世界\n");
-
+  M5Cardputer.Display.setTextSize(1);
   M5Cardputer.Display.setTextDatum(top_left); // character base position
   M5Cardputer.Display.setTextWrap(false);
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
   M5Cardputer.Display.setCursor(0, 0);
-
 
   // Calculate Cardputer specific display scale parameters
   X_WIDTH = M5Cardputer.Display.width();

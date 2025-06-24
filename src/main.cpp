@@ -325,12 +325,15 @@ void prtBrightLvl(uint8_t brightLvl)
   // clear
   M5Cardputer.Display.fillRect(W_CHR * BRIGHT_POS, SC_LINES[1], W_CHR * BRIGHT_LEN, H_CHR, TFT_BLACK);
 
-  M5Cardputer.Display.setTextSize(0.3);
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
   char brightLvlBuf[4]; // Buffer for "XXX" + null terminator
   M5Cardputer.Display.setCursor(W_CHR * BRIGHT_POS, SC_LINES[1] + 3);
   snprintf(brightLvlBuf, sizeof(brightLvlBuf), "%3u", brightLvl);
-  M5Cardputer.Display.print(brightLvlBuf);
+
+  // M5Cardputer.Display.setTextSize(0.3);
+  // M5Cardputer.Display.print(brightLvlBuf);
+  M5Cardputer.Display.setTextSize(0.3);
+  M5Cardputer.Display.drawString(brightLvlBuf, 0, SC_LINES[1], 2);
 }
 
 static uint8_t consecutiveLowBatteryCount = 0;

@@ -7,7 +7,7 @@ void dispInit();
 void prtTempValue(float temp_val);
 void prtHumiValue(float humi_val);
 void battery_check();
-void batDisp(uint8_t batLvl);
+void prtBatLvl(uint8_t batLvl);
 void lowBatteryCheck(uint8_t batLvl);
 
 #include <Adafruit_Sensor.h>
@@ -237,10 +237,10 @@ void battery_check()
     return;
 
   PREV_BATLVL = batLvl;
-  batDisp(batLvl);
+  prtBatLvl(batLvl);
 }
 
-void batDisp(uint8_t batLvl)
+void prtBatLvl(uint8_t batLvl)
 {
   // Line0 : battery level display
   //---- 012345678901234567890123456789---

@@ -2,12 +2,14 @@
 
 void setup();
 void loop();
+void keyCheck();
 void dth11_sensor();
 void dispInit();
 void prtTempValue(float temp_val);
 void prtHumiValue(float humi_val);
-void battery_check();
+void batteryState();
 void prtBatLvl(uint8_t batLvl);
+void prtBrightLvl(uint8_t brightLvl);
 void lowBatteryCheck(uint8_t batLvl);
 
 #include <Adafruit_Sensor.h>
@@ -20,6 +22,7 @@ void lowBatteryCheck(uint8_t batLvl);
 // #define DHTTYPE    DHT21     // DHT 21 (AM2301)
 DHT_Unified dht(DHTPIN, DHTTYPE);
 static unsigned long DTH11_CHECK_INTERVAL_MS = 1 * 1000UL;
+// extern uint8_t LCD_BRIGHT = 40;         // LCD normal bright level (0-255)
 
 void setup()
 {
@@ -85,8 +88,52 @@ void setup()
 void loop()
 {
   dth11_sensor();
-  battery_check();
+  batteryState();
+  keyCheck();
   vTaskDelay(1);
+}
+
+void keyCheck()
+{
+  M5Cardputer.update(); // update Cardputer key input
+
+  bool setting = false;
+  int tmp_bright = (int)LCD_BRIGHT;
+
+  if (M5Cardputer.Keyboard.isKeyPressed(';')) // up
+  {
+    tmp_bright += 10;
+    setting = true;
+  }
+  else if (M5Cardputer.Keyboard.isKeyPressed('.')) // down
+  {
+    tmp_bright -= 10;
+    setting = true;
+  }
+  else if (M5Cardputer.Keyboard.isKeyPressed(',')) // left
+  {
+    tmp_bright -= 1;
+    setting = true;
+  }
+  else if (M5Cardputer.Keyboard.isKeyPressed('/')) // right
+  {
+    tmp_bright += 1;
+    setting = true;
+  }
+
+  if (setting)
+  {
+    if (tmp_bright > 255)
+      tmp_bright= 255;
+    else if (tmp_bright < 0)
+      tmp_bright = 0;
+
+    LCD_BRIGHT = (uint8_t)tmp_bright;
+    M5Cardputer.Display.setBrightness(LCD_BRIGHT);
+    prtBrightLvl(LCD_BRIGHT);
+    wrtNVS(NVM_BRT_TITLE, LCD_BRIGHT);
+    delay(500);
+  }
 }
 
 static unsigned long PREV_DTH11_TM = 0L;
@@ -130,6 +177,7 @@ void dth11_sensor()
 }
 
 #define BATLVL_COL 22
+#define BRRIGHTLVL_COL 19
 #define TEMP_COL 3
 #define HUMI_COL 19
 
@@ -137,7 +185,7 @@ void dispInit()
 {
   // ---012345678901234567890123456789----
   // L0:-- DTH11 Sensor --    bat.---%
-  // L1:
+  // L1:                   bright ---
   // L2:
   // L3:
   // L4:
@@ -157,6 +205,11 @@ void dispInit()
   M5Cardputer.Display.setCursor(W_CHR * BATLVL_COL, SC_LINES[0]);
   M5Cardputer.Display.print(F("bat.---%"));
 
+  //  L1 :LCE Bright Level ---------------------------------------
+  // M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  M5Cardputer.Display.setCursor(W_CHR * BRRIGHTLVL_COL, SC_LINES[1]);
+  M5Cardputer.Display.print(F("bright"));
+
   M5Cardputer.Display.setTextColor(TFT_ORANGE, TFT_BLACK);
   M5Cardputer.Display.setCursor(W_CHR * TEMP_COL, SC_LINES[7]);
   //--------------------------"012345678901234567890123456789"--;
@@ -170,6 +223,8 @@ void dispInit()
 
   M5Cardputer.Display.setFont(&fonts::Font6);
   M5Cardputer.Display.setTextSize(1);
+
+  prtBrightLvl(LCD_BRIGHT);
 }
 
 void updateFloatValueDisplay(float currentValue, float &previousValue, uint8_t lineIndex, uint8_t column, uint8_t widthChars)
@@ -214,7 +269,7 @@ static unsigned long PREV_BATCHK_TM = 0L;
 static uint8_t PREV_BATLVL = 0;
 static bool batChk_first = true;
 
-void battery_check()
+void batteryState()
 {
   const unsigned long BATCHK_INTVAL = 1993UL;
   unsigned long currentTime = millis(); // Get current time once
@@ -233,7 +288,7 @@ void battery_check()
 
   if (batChk_first)
     batChk_first = false;
-  else if( (batLvl == PREV_BATLVL) || (abs(batLvl - PREV_BATLVL) > 5))
+  else if ((batLvl == PREV_BATLVL) || (abs(batLvl - PREV_BATLVL) > 5))
     return;
 
   PREV_BATLVL = batLvl;
@@ -259,13 +314,32 @@ void prtBatLvl(uint8_t batLvl)
   M5Cardputer.Display.print(batLvlBuf);
 }
 
+void prtBrightLvl(uint8_t brightLvl)
+{
+  // Line1 : battery level display
+  //---- 012345678901234567890123456789---
+  // L1_" xxx                         "--
+  const int BRIGHT_POS = 26; // Bright value display start position
+  const int BRIGHT_LEN = 3; // Bright value display length
+
+  // clear
+  M5Cardputer.Display.fillRect(W_CHR * BRIGHT_POS, SC_LINES[1], W_CHR * BRIGHT_LEN, H_CHR, TFT_BLACK);
+
+  M5Cardputer.Display.setTextSize(0.3);
+  M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  char brightLvlBuf[4]; // Buffer for "XXX" + null terminator
+  M5Cardputer.Display.setCursor(W_CHR * BRIGHT_POS, SC_LINES[1] + 3);
+  snprintf(brightLvlBuf, sizeof(brightLvlBuf), "%3u", brightLvl);
+  M5Cardputer.Display.print(brightLvlBuf);
+}
+
 static uint8_t consecutiveLowBatteryCount = 0;
 void lowBatteryCheck(uint8_t batLvl)
 {
   const uint8_t LOWBAT_LVL_THRESHOLD = 10; // % : define LOW BATTERY lvl
   const uint8_t LOWBAT_CONSECUTIVE_READINGS = 5;
   const int LOWBAT_DISP_COL = 45;
-  
+
   // Update consecutive low battery count
   if (batLvl < LOWBAT_LVL_THRESHOLD)
   {
@@ -285,7 +359,7 @@ void lowBatteryCheck(uint8_t batLvl)
     M5Cardputer.Display.fillScreen(TFT_BLACK);
     M5Cardputer.Display.setFont(&fonts::Font4);
     M5Cardputer.Display.setTextSize(1);
-    M5Cardputer.Display.setCursor( LOWBAT_DISP_COL , SC_LINES[3]);
+    M5Cardputer.Display.setCursor(LOWBAT_DISP_COL, SC_LINES[3]);
     M5Cardputer.Display.setTextColor(TFT_RED, TFT_BLACK);
     M5Cardputer.Display.print(F("Low Battery !!"));
     POWER_OFF();

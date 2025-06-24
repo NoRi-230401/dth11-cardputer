@@ -1,9 +1,12 @@
 #include "N_util.h"
 #include <M5StackUpdater.h>
-#include <WiFi.h>          // Added for WiFi.mode(WIFI_OFF)
+#include <WiFi.h> // Added for WiFi.mode(WIFI_OFF)
 
 static SPIClass SPI2;
 bool SD_ENABLE;
+uint8_t LCD_BRIGHT;
+const char *NVM_BRT_TITLE = "brt";
+
 // ----- Cardputer Specific disp paramaters -----------
 // const int32_t N_COLS = 20; // columns
 // const int32_t N_ROWS = 6;  // rows
@@ -11,9 +14,9 @@ const int32_t N_COLS = 30; // columns
 const int32_t N_ROWS = 8;  // rows
 
 //---- caluculated in m5stackc_begin() ----------------
-int32_t W_CHR, H_CHR;             // Character dimensions
-int32_t X_WIDTH, Y_HEIGHT;        // Screen dimensions
-int32_t SC_LINES[N_ROWS];         // Array to store Y coordinates of each line
+int32_t W_CHR, H_CHR;      // Character dimensions
+int32_t X_WIDTH, Y_HEIGHT; // Screen dimensions
+int32_t SC_LINES[N_ROWS];  // Array to store Y coordinates of each line
 
 void m5stack_begin()
 {
@@ -45,8 +48,8 @@ void m5stack_begin()
   }
 
   // display setup at startup
+  M5Cardputer.Display.setBrightness(0);
   M5Cardputer.Display.fillScreen(TFT_BLACK);
-  M5Cardputer.Display.setBrightness(BRIGHT_NORMAL);
   M5Cardputer.Display.setRotation(1);
   M5Cardputer.Display.setFont(&fonts::lgfxJapanGothic_16);
   M5Cardputer.Display.setTextSize(1);
@@ -55,6 +58,16 @@ void m5stack_begin()
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
   M5Cardputer.Display.setCursor(0, 0);
 
+  // LCD brightness
+  uint8_t nvmData;
+  if (rdNVS(NVM_BRT_TITLE, nvmData))
+    LCD_BRIGHT = nvmData;
+  else
+    LCD_BRIGHT = 40;
+
+  M5Cardputer.Display.setBrightness(LCD_BRIGHT);
+  wrtNVS(NVM_BRT_TITLE, LCD_BRIGHT);
+  
   // Calculate Cardputer specific display scale parameters
   X_WIDTH = M5Cardputer.Display.width();
   Y_HEIGHT = M5Cardputer.Display.height();
@@ -64,7 +77,6 @@ void m5stack_begin()
   {
     SC_LINES[i] = i * H_CHR;
   }
-
 
   // SPI setup for using SD card
   SPI2.begin(
@@ -145,11 +157,34 @@ void dispLx(uint8_t Lx, const char *msg)
   M5Cardputer.Display.print(msg);
 }
 
-
 void POWER_OFF()
 {
   dbPrtln(" *** POWER OFF ***");
   delay(5 * 1000L);
   M5.Power.powerOff();
-  // never return 
+  // never return
+}
+
+nvs_handle_t nvs;
+const char *NVS_SETTING = "setting";
+bool wrtNVS(const char *title, uint8_t data)
+{
+  if (ESP_OK == nvs_open(NVS_SETTING, NVS_READWRITE, &nvs))
+  {
+    nvs_set_u8(nvs, title, data); // Use title directly
+    nvs_close(nvs);
+    return true;
+  }
+  return false;
+}
+
+bool rdNVS(const char *title, uint8_t &data)
+{
+  if (ESP_OK == nvs_open(NVS_SETTING, NVS_READONLY, &nvs))
+  {
+    nvs_get_u8(nvs, title, &data); // Use title directly
+    nvs_close(nvs);
+    return true;
+  }
+  return false;
 }

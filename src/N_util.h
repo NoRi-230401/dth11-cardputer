@@ -8,6 +8,7 @@
 // -------------------------------------------------------
 #include <Arduino.h>
 #include <SD.h>
+#include <nvs.h>
 #include <M5Cardputer.h>
 
 extern bool SD_ENABLE;
@@ -15,7 +16,8 @@ extern const int32_t N_COLS, N_ROWS;
 extern int32_t W_CHR, H_CHR;        // Character dimensions
 extern int32_t X_WIDTH, Y_HEIGHT;   // Screen dimensions
 extern int32_t SC_LINES[];          // Array to store Y coordinates of each line
-#define BRIGHT_NORMAL 40            // LCD normal bright level (0-255)
+extern uint8_t LCD_BRIGHT;
+extern const char *NVM_BRT_TITLE;
 
 extern void m5stack_begin();
 extern void SDU_lobby();
@@ -24,6 +26,8 @@ extern void dbPrtln(String msg);
 extern void dbPrt(String msg);
 extern void dispLx(uint8_t Lx, const char *msg);
 extern void POWER_OFF();
+extern bool wrtNVS(const char *title, uint8_t data);
+extern bool rdNVS(const char *title, uint8_t &data);
 
 // -------------------------------------------------------
 #endif // _N_UTIL_H

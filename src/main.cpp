@@ -124,7 +124,7 @@ void keyCheck()
   if (setting)
   {
     if (tmp_bright > 255)
-      tmp_bright= 255;
+      tmp_bright = 255;
     else if (tmp_bright < 0)
       tmp_bright = 0;
 
@@ -176,11 +176,6 @@ void dth11_sensor()
   }
 }
 
-#define BATLVL_COL 22
-#define BRRIGHTLVL_COL 19
-#define TEMP_COL 3
-#define HUMI_COL 19
-
 void dispInit()
 {
   // ---012345678901234567890123456789----
@@ -194,35 +189,33 @@ void dispInit()
   // L7:   気温　℃         湿度　％
   // ---012345678901234567890123456789----
 
+  const int TEMP_COL = 3;
+  const int HUMI_COL = 19;
+
   M5Cardputer.Display.fillScreen(TFT_BLACK); // 画面塗り潰し
-  M5Cardputer.Display.setTextColor(TFT_SKYBLUE, TFT_BLACK);
-  M5Cardputer.Display.setCursor(0, 0);
-  //--------------------------"012345678901234567890123456789"------------------;
-  M5Cardputer.Display.print(F("-- DTH11 Sensor --"));
-
-  //  L0 :Battery Level ---------------------------------------
-  M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  M5Cardputer.Display.setCursor(W_CHR * BATLVL_COL, SC_LINES[0]);
-  M5Cardputer.Display.print(F("bat.---%"));
-
-  //  L1 :LCE Bright Level ---------------------------------------
-  // M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  M5Cardputer.Display.setCursor(W_CHR * BRRIGHTLVL_COL, SC_LINES[1]);
-  M5Cardputer.Display.print(F("bright"));
-
+  M5Cardputer.Display.setFont(&fonts::lgfxJapanGothic_16);
+  M5Cardputer.Display.setTextSize(1);
+    
+  // temperater
   M5Cardputer.Display.setTextColor(TFT_ORANGE, TFT_BLACK);
   M5Cardputer.Display.setCursor(W_CHR * TEMP_COL, SC_LINES[7]);
   //--------------------------"012345678901234567890123456789"--;
   M5Cardputer.Display.print(F("気温　℃"));
 
+  // humidity
   M5Cardputer.Display.setTextColor(TFT_GREEN, TFT_BLACK);
   M5Cardputer.Display.setCursor(W_CHR * HUMI_COL, SC_LINES[7]);
   //----------"012345678901234567890123456789"--;
   M5Cardputer.Display.print(F("湿度　％"));
+  
+  //--L0 : title--------------
+  M5Cardputer.Display.setTextColor(TFT_SKYBLUE, TFT_BLACK);
+  M5Cardputer.Display.drawString(F("-- DTH11 Sensor --"), 0, SC_LINES[0], &fonts::Font2);
+  
+  // L0 :Battery Level -----
+  const int BATVAL_POS = 22; // Battery value display start position
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-
-  M5Cardputer.Display.setFont(&fonts::Font6);
-  M5Cardputer.Display.setTextSize(1);
+  M5Cardputer.Display.drawString(F("bat.---%"), W_CHR * BATVAL_POS, SC_LINES[0], &fonts::Font2);
 
   prtBrightLvl(LCD_BRIGHT);
 }
@@ -247,6 +240,7 @@ void updateFloatValueDisplay(float currentValue, float &previousValue, uint8_t l
     snprintf(buf, sizeof(buf), "%2.1f", currentValue);
   }
 
+  M5Cardputer.Display.setFont(&fonts::Font6);
   M5Cardputer.Display.setTextSize(1);
   M5Cardputer.Display.fillRect(W_CHR * column, SC_LINES[lineIndex], W_CHR * widthChars, H_CHR * 4, TFT_BLACK);
   M5Cardputer.Display.setCursor(W_CHR * column, SC_LINES[lineIndex]);
@@ -300,40 +294,31 @@ void prtBatLvl(uint8_t batLvl)
   // Line0 : battery level display
   //---- 012345678901234567890123456789---
   // L0_"                      bat.xxx%"--
-  const int BATVAL_POS = 26; // Battery value display start position
-  const int BATVAL_LEN = 3;  // Battery value display length
+  const int BATVAL_POS = 22; // Battery value display start position
+  char msg[10] = "bat.";     // message buffer
+  snprintf(msg, sizeof(msg), "%s%3u%%", msg, batLvl);
+  dbPrtln(msg);
 
-  // clear
-  M5Cardputer.Display.fillRect(W_CHR * BATVAL_POS, SC_LINES[0], W_CHR * BATVAL_LEN, H_CHR, TFT_BLACK);
-
-  M5Cardputer.Display.setTextSize(0.3);
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  char batLvlBuf[4]; // Buffer for "XXX" + null terminator
-  M5Cardputer.Display.setCursor(W_CHR * BATVAL_POS, SC_LINES[0] + 3);
-  snprintf(batLvlBuf, sizeof(batLvlBuf), "%3u", batLvl);
-  M5Cardputer.Display.print(batLvlBuf);
+  M5Cardputer.Display.setTextSize(1);
+  M5Cardputer.Display.fillRect(W_CHR * BATVAL_POS, SC_LINES[0], W_CHR * sizeof(msg), H_CHR, TFT_BLACK); // clear
+  M5Cardputer.Display.drawString(msg, W_CHR * BATVAL_POS, SC_LINES[0], &fonts::Font2);
 }
 
 void prtBrightLvl(uint8_t brightLvl)
 {
   // Line1 : battery level display
   //---- 012345678901234567890123456789---
-  // L1_" xxx                         "--
-  const int BRIGHT_POS = 26; // Bright value display start position
-  const int BRIGHT_LEN = 3; // Bright value display length
-
-  // clear
-  M5Cardputer.Display.fillRect(W_CHR * BRIGHT_POS, SC_LINES[1], W_CHR * BRIGHT_LEN, H_CHR, TFT_BLACK);
+  // L1_"  bright = xxx                "--
+  const int BRIGHT_POS = 2;   // Bright value display start position
+  char msg[20] = "bright = "; // message buffer
+  snprintf(msg, sizeof(msg), "%s%3u", msg, brightLvl);
+  dbPrtln(msg);
 
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  char brightLvlBuf[4]; // Buffer for "XXX" + null terminator
-  M5Cardputer.Display.setCursor(W_CHR * BRIGHT_POS, SC_LINES[1] + 3);
-  snprintf(brightLvlBuf, sizeof(brightLvlBuf), "%3u", brightLvl);
-
-  // M5Cardputer.Display.setTextSize(0.3);
-  // M5Cardputer.Display.print(brightLvlBuf);
-  M5Cardputer.Display.setTextSize(0.3);
-  M5Cardputer.Display.drawString(brightLvlBuf, 0, SC_LINES[1], 2);
+  M5Cardputer.Display.setTextSize(1);
+  M5Cardputer.Display.fillRect(0, SC_LINES[1], W_CHR * sizeof(msg), H_CHR, TFT_BLACK); // clear
+  M5Cardputer.Display.drawString(msg, W_CHR * BRIGHT_POS, SC_LINES[1], &fonts::Font2);
 }
 
 static uint8_t consecutiveLowBatteryCount = 0;

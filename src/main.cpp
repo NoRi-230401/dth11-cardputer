@@ -1,3 +1,11 @@
+// --------------------------------------------------------
+//  *** dth11-cardputer ***     by NoRi
+//  DTH11 Senseor software for Cardputer 
+// (Temperature and Humidity) 
+//    2025-06-25  v104
+// https://github.com/NoRi-230401/dth11-cardputer
+//  MIT License
+// --------------------------------------------------------
 #include "N_util.h"
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
@@ -343,7 +351,7 @@ void dispInit()
   M5Cardputer.Display.setFont(&fonts::lgfxJapanGothic_16);
   M5Cardputer.Display.setTextSize(1);
 
-  // temperater
+  // temperature
   M5Cardputer.Display.setTextColor(TFT_ORANGE, TFT_BLACK);
   M5Cardputer.Display.setCursor(W_CHR * TEMP_COL, SC_LINES[7]);
   //--------------------------"012345678901234567890123456789"--;

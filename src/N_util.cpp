@@ -4,12 +4,8 @@
 
 static SPIClass SPI2;
 bool SD_ENABLE;
-uint8_t LCD_BRIGHT;
-const char *NVM_BRT_TITLE = "brt";
 
 // ----- Cardputer Specific disp paramaters -----------
-// const int32_t N_COLS = 20; // columns
-// const int32_t N_ROWS = 6;  // rows
 const int32_t N_COLS = 30; // columns
 const int32_t N_ROWS = 8;  // rows
 
@@ -58,16 +54,6 @@ void m5stack_begin()
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
   M5Cardputer.Display.setCursor(0, 0);
 
-  // LCD brightness
-  uint8_t nvmData;
-  if (rdNVS(NVM_BRT_TITLE, nvmData))
-    LCD_BRIGHT = nvmData;
-  else
-    LCD_BRIGHT = 40;
-
-  M5Cardputer.Display.setBrightness(LCD_BRIGHT);
-  wrtNVS(NVM_BRT_TITLE, LCD_BRIGHT);
-  
   // Calculate Cardputer specific display scale parameters
   X_WIDTH = M5Cardputer.Display.width();
   Y_HEIGHT = M5Cardputer.Display.height();

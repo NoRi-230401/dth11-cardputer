@@ -16,8 +16,6 @@ extern const int32_t N_COLS, N_ROWS;
 extern int32_t W_CHR, H_CHR;        // Character dimensions
 extern int32_t X_WIDTH, Y_HEIGHT;   // Screen dimensions
 extern int32_t SC_LINES[];          // Array to store Y coordinates of each line
-extern uint8_t LCD_BRIGHT;
-extern const char *NVM_BRT_TITLE;
 
 extern void m5stack_begin();
 extern void SDU_lobby();

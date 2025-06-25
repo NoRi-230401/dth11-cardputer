@@ -1,17 +1,4 @@
 #include "N_util.h"
-
-void setup();
-void loop();
-void keyCheck();
-void dth11_sensor();
-void dispInit();
-void prtTempValue(float temp_val);
-void prtHumiValue(float humi_val);
-void batteryState();
-void prtBatLvl(uint8_t batLvl);
-void prtBrightLvl(uint8_t brightLvl);
-void lowBatteryCheck(uint8_t batLvl);
-
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
@@ -22,7 +9,53 @@ void lowBatteryCheck(uint8_t batLvl);
 // #define DHTTYPE    DHT21     // DHT 21 (AM2301)
 DHT_Unified dht(DHTPIN, DHTTYPE);
 static unsigned long DTH11_CHECK_INTERVAL_MS = 1 * 1000UL;
-// extern uint8_t LCD_BRIGHT = 40;         // LCD normal bright level (0-255)
+
+enum KeyNum
+{
+  KN_NONE,
+  KN_UP,
+  KN_DOWN,
+  KN_LEFT,
+  KN_RIGHT
+};
+
+enum SettingMode
+{
+  SM_NONE,
+  SM_BRIGHT_LEVEL,
+  SM_LOWBAT_THRESHOLD
+};
+static SettingMode settingMode = SM_NONE;
+
+#define BRIGHT_LVL_INIT 30
+#define BRIGHT_LVL_MAX 255
+#define BRIGHT_LVL_MIN 0
+#define LOWBAT_THRESHOLD_INIT 10
+#define LOWBAT_THRESHOLD_MAX 95
+#define LOWBAT_THRESHOLD_MIN 5
+static uint8_t BRIGHT_LVL;       // 0 - 255 : LCD bright level
+static uint8_t LOWBAT_THRESHOLD; // 5 - 95% : LOW BATTERY Threshold level
+const char *NVM_BRIGHT_TITLE = "brt";
+const char *NVM_LOWBAT_TITLE = "lbat";
+
+void setup();
+void loop();
+bool keyCheck();
+void settings();
+bool updateSettingValue(uint8_t &value, KeyNum keyNo, uint8_t min, uint8_t max, uint8_t step, uint8_t big_step);
+void changeSettings(SettingMode mode, KeyNum keyNo);
+void dth11_sensor();
+void dispInit();
+void settingsInit();
+void updateFloatValueDisplay(float currentValue, float &previousValue, uint8_t lineIndex, uint8_t column, uint8_t widthChars);
+void prtTempValue(float temp_val);
+void prtHumiValue(float humi_val);
+void batteryState();
+void prtBatLvl(uint8_t batLvl);
+void prtSetting(const char *msg, uint8_t data);
+void changeBright(KeyNum keyNo);
+void changeLowBatThr(KeyNum keyNo);
+void lowBatteryCheck(uint8_t batLvl);
 
 void setup()
 {
@@ -34,10 +67,9 @@ void setup()
     SD.end();
   }
 
-  // Initialize device.
+  // Initialize sensor
   dht.begin();
   sensor_t sensor;
-
 #ifdef DEBUG
   // Print temperature sensor details.
   dht.temperature().getSensor(&sensor);
@@ -80,8 +112,9 @@ void setup()
   Serial.println("min_delay: " + String(sensor.min_delay) + " usec");
   Serial.println(F("------------------------------------"));
 #endif
-
   DTH11_CHECK_INTERVAL_MS = sensor.min_delay / 1000UL;
+
+  settingsInit();
   dispInit();
 }
 
@@ -89,51 +122,165 @@ void loop()
 {
   dth11_sensor();
   batteryState();
-  keyCheck();
+
+  if (keyCheck())
+    settings();
+
   vTaskDelay(1);
 }
 
-void keyCheck()
+bool keyCheck()
 {
   M5Cardputer.update(); // update Cardputer key input
 
-  bool setting = false;
-  int tmp_bright = (int)LCD_BRIGHT;
-
-  if (M5Cardputer.Keyboard.isKeyPressed(';')) // up
+  if (M5Cardputer.Keyboard.isChange())
   {
-    tmp_bright += 10;
-    setting = true;
+    if (M5Cardputer.Keyboard.isPressed())
+      return true;
+  }
+  return false;
+}
+
+void settings()
+{
+  // Setting Mode Check
+  bool setting_do = false;
+  KeyNum keyNum = KN_NONE;
+
+  if (M5Cardputer.Keyboard.isKeyPressed('0')) // clear
+  {
+    settingMode = SM_NONE;
+    setting_do = true;
+  }
+  else if (M5Cardputer.Keyboard.isKeyPressed('1')) // lcd brightness
+  {
+    settingMode = SM_BRIGHT_LEVEL;
+    setting_do = true;
+  }
+  else if (M5Cardputer.Keyboard.isKeyPressed('2')) // lowBattery threshold
+  {
+    settingMode = SM_LOWBAT_THRESHOLD;
+    setting_do = true;
+  }
+  else if (M5Cardputer.Keyboard.isKeyPressed(';')) // up
+  {
+    keyNum = KN_UP;
+    setting_do = true;
   }
   else if (M5Cardputer.Keyboard.isKeyPressed('.')) // down
   {
-    tmp_bright -= 10;
-    setting = true;
+    keyNum = KN_DOWN;
+    setting_do = true;
   }
   else if (M5Cardputer.Keyboard.isKeyPressed(',')) // left
   {
-    tmp_bright -= 1;
-    setting = true;
+    keyNum = KN_LEFT;
+    setting_do = true;
   }
   else if (M5Cardputer.Keyboard.isKeyPressed('/')) // right
   {
-    tmp_bright += 1;
-    setting = true;
+    keyNum = KN_RIGHT;
+    setting_do = true;
   }
 
-  if (setting)
+  if (setting_do)
   {
-    if (tmp_bright > 255)
-      tmp_bright = 255;
-    else if (tmp_bright < 0)
-      tmp_bright = 0;
-
-    LCD_BRIGHT = (uint8_t)tmp_bright;
-    M5Cardputer.Display.setBrightness(LCD_BRIGHT);
-    prtBrightLvl(LCD_BRIGHT);
-    wrtNVS(NVM_BRT_TITLE, LCD_BRIGHT);
-    delay(500);
+    changeSettings(settingMode, keyNum);
+    return;
   }
+}
+
+void changeSettings(SettingMode mode, KeyNum keyNo)
+{
+  if (mode == SM_NONE)
+  {
+    // clear L1 : setting display line
+    M5Cardputer.Display.fillRect(0, SC_LINES[1], X_WIDTH, H_CHR, TFT_BLACK);
+  }
+
+  else if (mode == SM_BRIGHT_LEVEL)
+    changeBright(keyNo);
+
+  else if (mode == SM_LOWBAT_THRESHOLD)
+    changeLowBatThr(keyNo);
+}
+
+bool updateSettingValue(uint8_t &value, KeyNum keyNo, uint8_t min, uint8_t max, uint8_t step, uint8_t big_step)
+{
+  int tempValue = value;
+  bool changeKey = false;
+
+  switch (keyNo)
+  {
+  case KN_UP:
+    tempValue += big_step;
+    changeKey = true;
+    break;
+  case KN_DOWN:
+    tempValue -= big_step;
+    changeKey = true;
+    break;
+  case KN_RIGHT:
+    tempValue += step;
+    changeKey = true;
+    break;
+  case KN_LEFT:
+    tempValue -= step;
+    changeKey = true;
+    break;
+  default:
+    break;
+  }
+
+  if (changeKey)
+  {
+    if (tempValue > max)
+      tempValue = max;
+    if (tempValue < min)
+      tempValue = min;
+
+    if (value != (uint8_t)tempValue)
+    {
+      value = (uint8_t)tempValue;
+      return true; // Value changed
+    }
+  }
+  return false; // No change
+}
+
+void prtSetting(const char *msg, uint8_t data)
+{
+  // Line1 : setting display
+  const int DISP_POS = 2; // display start position
+  char msgBuf[30];        // message buffer
+  snprintf(msgBuf, sizeof(msgBuf), "%s%3u", msg, data);
+  dbPrtln(msgBuf);
+
+  M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  M5Cardputer.Display.setTextSize(1);
+  M5Cardputer.Display.fillRect(0, SC_LINES[1], X_WIDTH, H_CHR, TFT_BLACK); // clear L1
+  M5Cardputer.Display.drawString(msgBuf, W_CHR * DISP_POS, SC_LINES[1], &fonts::Font2);
+}
+
+#define STEP_SHORT 1
+#define STEP_BIG 10
+void changeBright(KeyNum keyNo)
+{
+  if (updateSettingValue(BRIGHT_LVL, keyNo, BRIGHT_LVL_MIN, BRIGHT_LVL_MAX, STEP_SHORT, STEP_BIG))
+  {
+    M5Cardputer.Display.setBrightness(BRIGHT_LVL);
+    wrtNVS(NVM_BRIGHT_TITLE, BRIGHT_LVL);
+  }
+  prtSetting("bright = ", BRIGHT_LVL);
+}
+
+void changeLowBatThr(KeyNum keyNo)
+{
+  if (updateSettingValue(LOWBAT_THRESHOLD, keyNo, LOWBAT_THRESHOLD_MIN, LOWBAT_THRESHOLD_MAX, STEP_SHORT, STEP_BIG))
+  {
+    wrtNVS(NVM_LOWBAT_TITLE, LOWBAT_THRESHOLD);
+  }
+  prtSetting("lowBattery threshold = ", LOWBAT_THRESHOLD);
 }
 
 static unsigned long PREV_DTH11_TM = 0L;
@@ -195,7 +342,7 @@ void dispInit()
   M5Cardputer.Display.fillScreen(TFT_BLACK); // 画面塗り潰し
   M5Cardputer.Display.setFont(&fonts::lgfxJapanGothic_16);
   M5Cardputer.Display.setTextSize(1);
-    
+
   // temperater
   M5Cardputer.Display.setTextColor(TFT_ORANGE, TFT_BLACK);
   M5Cardputer.Display.setCursor(W_CHR * TEMP_COL, SC_LINES[7]);
@@ -207,17 +354,47 @@ void dispInit()
   M5Cardputer.Display.setCursor(W_CHR * HUMI_COL, SC_LINES[7]);
   //----------"012345678901234567890123456789"--;
   M5Cardputer.Display.print(F("湿度　％"));
-  
+
   //--L0 : title--------------
   M5Cardputer.Display.setTextColor(TFT_SKYBLUE, TFT_BLACK);
   M5Cardputer.Display.drawString(F("-- DTH11 Sensor --"), 0, SC_LINES[0], &fonts::Font2);
-  
+
   // L0 :Battery Level -----
   const int BATVAL_POS = 22; // Battery value display start position
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
   M5Cardputer.Display.drawString(F("bat.---%"), W_CHR * BATVAL_POS, SC_LINES[0], &fonts::Font2);
+}
 
-  prtBrightLvl(LCD_BRIGHT);
+void settingsInit()
+{
+  // LCD brightness setup
+  uint8_t nvmData;
+  if (!rdNVS(NVM_BRIGHT_TITLE, nvmData))
+  {
+    BRIGHT_LVL = BRIGHT_LVL_INIT;         // 0 - 255 : LCD bright level
+    wrtNVS(NVM_BRIGHT_TITLE, BRIGHT_LVL); // Write only if using default
+  }
+  else
+  {
+    BRIGHT_LVL = nvmData;
+  }
+  M5Cardputer.Display.setBrightness(BRIGHT_LVL);
+
+  // Low Battery Threshold setup
+  if (!rdNVS(NVM_LOWBAT_TITLE, nvmData))
+  {
+    LOWBAT_THRESHOLD = LOWBAT_THRESHOLD_INIT; // % : low battery threshold lvl
+    wrtNVS(NVM_LOWBAT_TITLE, LOWBAT_THRESHOLD);
+  }
+  else
+  {
+    if (nvmData < LOWBAT_THRESHOLD_MIN || nvmData > LOWBAT_THRESHOLD_MAX)
+    {
+      nvmData = LOWBAT_THRESHOLD_INIT;
+      wrtNVS(NVM_LOWBAT_TITLE, nvmData);
+    }
+    LOWBAT_THRESHOLD = nvmData;
+  }
 }
 
 void updateFloatValueDisplay(float currentValue, float &previousValue, uint8_t lineIndex, uint8_t column, uint8_t widthChars)
@@ -247,22 +424,27 @@ void updateFloatValueDisplay(float currentValue, float &previousValue, uint8_t l
   M5Cardputer.Display.print(buf);
 }
 
-static float prev_temp = 0.0;
+#define TEMP_LINE_INDEX 3
+#define TEMP_COL_INDEX 1
+#define TEMP_DISP_WIDTH 13
+static float PREV_TEMPERATURE = 0.0;
 void prtTempValue(float temp_val)
 {
-  updateFloatValueDisplay(temp_val, prev_temp, 3, 1, 13);
+  updateFloatValueDisplay(temp_val, PREV_TEMPERATURE, TEMP_LINE_INDEX, TEMP_COL_INDEX, TEMP_DISP_WIDTH);
 }
 
-static float prev_humi = 0.0;
+#define HUMI_LINE_INDEX 3
+#define HUMI_COL_INDEX 17
+#define HUMI_DISP_WIDTH 13
+static float PREV_HUMIDITY = 0.0;
 void prtHumiValue(float humi_val)
 {
-  updateFloatValueDisplay(humi_val, prev_humi, 3, 17, 13);
+  updateFloatValueDisplay(humi_val, PREV_HUMIDITY, HUMI_LINE_INDEX, HUMI_COL_INDEX, HUMI_DISP_WIDTH);
 }
 
 static unsigned long PREV_BATCHK_TM = 0L;
-static uint8_t PREV_BATLVL = 0;
-static bool batChk_first = true;
-
+static uint8_t PREV_BATLVL = 255; // Use an impossible value to force the first update
+#define BATLVL_MAX 100
 void batteryState()
 {
   const unsigned long BATCHK_INTVAL = 1993UL;
@@ -275,14 +457,12 @@ void batteryState()
   PREV_BATCHK_TM = currentTime;
   uint8_t batLvl = (uint8_t)M5.Power.getBatteryLevel(); // Get battery level
   dbPrtln("batLvl: " + String(batLvl));
-  if (batLvl > 100)
-    batLvl = 100;
+  if (batLvl > BATLVL_MAX)
+    batLvl = BATLVL_MAX;
 
   lowBatteryCheck(batLvl);
 
-  if (batChk_first)
-    batChk_first = false;
-  else if ((batLvl == PREV_BATLVL) || (abs(batLvl - PREV_BATLVL) > 5))
+  if (batLvl == PREV_BATLVL) // The check now works correctly on the first run
     return;
 
   PREV_BATLVL = batLvl;
@@ -305,31 +485,14 @@ void prtBatLvl(uint8_t batLvl)
   M5Cardputer.Display.drawString(msg, W_CHR * BATVAL_POS, SC_LINES[0], &fonts::Font2);
 }
 
-void prtBrightLvl(uint8_t brightLvl)
-{
-  // Line1 : battery level display
-  //---- 012345678901234567890123456789---
-  // L1_"  bright = xxx                "--
-  const int BRIGHT_POS = 2;   // Bright value display start position
-  char msg[20] = "bright = "; // message buffer
-  snprintf(msg, sizeof(msg), "%s%3u", msg, brightLvl);
-  dbPrtln(msg);
-
-  M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  M5Cardputer.Display.setTextSize(1);
-  M5Cardputer.Display.fillRect(0, SC_LINES[1], W_CHR * sizeof(msg), H_CHR, TFT_BLACK); // clear
-  M5Cardputer.Display.drawString(msg, W_CHR * BRIGHT_POS, SC_LINES[1], &fonts::Font2);
-}
-
 static uint8_t consecutiveLowBatteryCount = 0;
 void lowBatteryCheck(uint8_t batLvl)
 {
-  const uint8_t LOWBAT_LVL_THRESHOLD = 10; // % : define LOW BATTERY lvl
   const uint8_t LOWBAT_CONSECUTIVE_READINGS = 5;
   const int LOWBAT_DISP_COL = 45;
 
   // Update consecutive low battery count
-  if (batLvl < LOWBAT_LVL_THRESHOLD)
+  if (batLvl < LOWBAT_THRESHOLD)
   {
     if (consecutiveLowBatteryCount < LOWBAT_CONSECUTIVE_READINGS)
     { // Avoid overflow if already at max

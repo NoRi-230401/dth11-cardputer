@@ -6,6 +6,8 @@ static SPIClass SPI2;
 bool SD_ENABLE;
 
 // ----- Cardputer Specific disp paramaters -----------
+// default japanese font 
+// lgfxJapanGothic_16 and lgfxJapanMincho_16
 const int32_t N_COLS = 30; // columns
 const int32_t N_ROWS = 8;  // rows
 
@@ -47,7 +49,7 @@ void m5stack_begin()
   M5Cardputer.Display.setBrightness(0);
   M5Cardputer.Display.fillScreen(TFT_BLACK);
   M5Cardputer.Display.setRotation(1);
-  M5Cardputer.Display.setFont(&fonts::lgfxJapanGothic_16);
+  M5Cardputer.Display.setFont(&fonts::lgfxJapanGothic_16); //default japanese font
   M5Cardputer.Display.setTextSize(1);
   M5Cardputer.Display.setTextDatum(top_left); // character base position
   M5Cardputer.Display.setTextWrap(false);

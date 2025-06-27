@@ -153,8 +153,11 @@ void POWER_OFF()
 {
   dbPrtln(" *** POWER OFF ***");
   delay(5 * 1000L);
-  M5.Power.powerOff();
-  // never return
+  
+  // M5.Power.powerOff();
+  M5Cardputer.Power.powerOff();
+
+  // *** never return ***
 }
 
 const char *NVS_SETTING = "setting";

@@ -556,7 +556,7 @@ void batteryState()
 
   // This will update consecutiveLowBatteryCount
   PREV_BATCHK_TM = currentTime;
-  uint8_t batLvl = (uint8_t)M5.Power.getBatteryLevel(); // Get battery level
+  uint8_t batLvl = (uint8_t)M5Cardputer.Power.getBatteryLevel(); // Get battery level
   dbPrtln("batLvl: " + String(batLvl));
   if (batLvl > BATLVL_MAX)
     batLvl = BATLVL_MAX;
@@ -625,7 +625,7 @@ void lowBatteryCheck(uint8_t batLvl)
   {
     M5Cardputer.Display.fillScreen(TFT_BLACK);
     M5Cardputer.Display.setTextColor(TFT_RED, TFT_BLACK);
-    M5Cardputer.Display.drawCenterString(F("Low Battery !!"), X_WIDTH / 2, Y_HEIGHT / 2, &fonts::Font4);
+    M5Cardputer.Display.drawCenterString(F("Low Battery !!"), X_WIDTH / 2, SC_LINES[3], &fonts::Font4);
 
     POWER_OFF();
     // never return

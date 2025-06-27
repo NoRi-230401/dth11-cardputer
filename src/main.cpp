@@ -43,13 +43,14 @@ static SettingMode settingMode = SM_NONE;
 #define LOWBAT_THRESHOLD_INIT 10
 #define LOWBAT_THRESHOLD_MAX 95
 #define LOWBAT_THRESHOLD_MIN 5
-#define LANG_INIT 0 // defaul .. english
-#define LANG_MAX 1  // defaul .. english
+#define LANG_INIT 0 // 0:English 1:Japanese
+#define LANG_MAX 1   
 
-const int BATLVL_ITEM_POS = 20;    // 'bat.' or '電池'
-const int BATLVL_VALUE_POS = 25;   // xxx
+const int BATLVL_ITEM_POS = 22;    // 'bat.' or '電池'
+const int BATLVL_VALUE_POS = 26;   // xxx
+const int BATLVL_VALUE_LEN = 3;
 const int BATLVL_PERCENT_POS = 29; // %
-const char *BATLVL_TITL[] = {"bat.", "電池"};
+const char *BATLVL_TITLE[] = {"bat.", "電池"};
 
 static uint8_t BRIGHT_LVL;       // 0 - 255 : LCD bright level
 static uint8_t LOWBAT_THRESHOLD; // 5 - 95% : LOW BATTERY Threshold level
@@ -263,7 +264,7 @@ void dispBatItem()
   M5Cardputer.Display.fillRect(W_CHR * BATLVL_ITEM_POS, SC_LINES[0], W_CHR * BATLVL_ITEM_LEN, H_CHR, TFT_BLACK);
   M5Cardputer.Display.setFont(&fonts::lgfxJapanMincho_16);
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  M5Cardputer.Display.drawString(BATLVL_TITL[LANG_INDEX], W_CHR * BATLVL_ITEM_POS, SC_LINES[0]);
+  M5Cardputer.Display.drawString(BATLVL_TITLE[LANG_INDEX], W_CHR * BATLVL_ITEM_POS, SC_LINES[0]);
 }
 
 bool updateLang(KeyNum keyNo)
@@ -505,7 +506,8 @@ void dispInit()
 
   // L0 :Battery Level -----
   dispBatItem();
-  M5Cardputer.Display.drawString(F("--- %"), W_CHR * BATLVL_VALUE_POS, SC_LINES[0]);
+  M5Cardputer.Display.drawString(F("---"), W_CHR * BATLVL_VALUE_POS, SC_LINES[0]);
+  M5Cardputer.Display.drawString(F("%"), W_CHR * BATLVL_PERCENT_POS, SC_LINES[0]);
 
   // L7 : Measuremnt items
   dispMeasItem();
@@ -625,9 +627,6 @@ void batteryState()
 
   lowBatteryCheck(batLvl);
 
-  if (batLvl == PREV_BATLVL) // The check now works correctly on the first run
-    return;
-
   if (batCheck_first)
   {
     batCheck_first = false;
@@ -645,18 +644,22 @@ void batteryState()
   prtBatLvl(batLvl);
 }
 
+static uint8_t PREV_BATLVL_DISP = 255; // Use an impossible value to force the first update
 void prtBatLvl(uint8_t batLvl)
 {
   // Line0 : battery level display
   //---- 012345678901234567890123456789---
   // L0_"                      bat.xxx%"--
 
-  char msg[4]; // message buffer
-  const int BATVAL_LEN = 3;
+  if (batLvl == PREV_BATLVL_DISP)
+    return;
+  PREV_BATLVL_DISP = batLvl;  
+
+  char msg[4]=""; // message buffer
   snprintf(msg, sizeof(msg), "%3u", batLvl);
   dbPrtln(msg);
 
-  M5Cardputer.Display.fillRect(W_CHR * BATLVL_VALUE_POS, SC_LINES[0], W_CHR * BATVAL_LEN, H_CHR, TFT_BLACK); // clear
+  M5Cardputer.Display.fillRect(W_CHR * BATLVL_VALUE_POS, SC_LINES[0], W_CHR * BATLVL_VALUE_LEN, H_CHR, TFT_BLACK); // clear
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
   M5Cardputer.Display.setFont(&fonts::lgfxJapanMincho_16);
   M5Cardputer.Display.setTextSize(1);

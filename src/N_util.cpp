@@ -6,7 +6,7 @@ static SPIClass SPI2;
 bool SD_ENABLE;
 
 // ----- Cardputer Specific disp paramaters -----------
-// default japanese font 
+// default japanese font
 // lgfxJapanGothic_16 and lgfxJapanMincho_16
 const int32_t N_COLS = 30; // columns
 const int32_t N_ROWS = 8;  // rows
@@ -16,28 +16,29 @@ int32_t W_CHR, H_CHR;      // Character dimensions
 int32_t X_WIDTH, Y_HEIGHT; // Screen dimensions
 int32_t SC_LINES[N_ROWS];  // Array to store Y coordinates of each line
 
+// #define PLATFORMIO_IDE_DEBUG
 void m5stack_begin()
 {
   auto cfg = M5.config();
   cfg.serial_baudrate = 115200; // Serial communication speed
   cfg.internal_imu = false;     // Do not use IMU (accelerometer/gyroscope)
   cfg.internal_mic = false;     // Do not use microphone
-  cfg.output_power = false;     // Disable Grove port power output
+  // cfg.output_power = false;  // Disable Grove port power output
   cfg.led_brightness = 0;
   M5Cardputer.begin(cfg, true);
-  M5Cardputer.Speaker.setVolume(0);
 
-#ifdef DEBUG
+#ifdef PLATFORMIO_IDE_DEBUG
   // vsCode terminal cannot get serial data
   //  of cardputer before 5 sec ...!
   delay(5000);
 #endif
+  dbPrtln("\n\n*** m5stack begin ***");
+
+  M5Cardputer.Speaker.setVolume(0);
   // Disable Wi-Fi and Bluetooth to save power as they are not used.
   WiFi.mode(WIFI_OFF);
   btStop();
   dbPrtln("Wi-Fi and Bluetooth disabled.");
-
-  dbPrtln("\n\n*** m5stack begin ***");
 
   // Reduce power consumption by lowering CPU frequency (e.g., 80MHz)
   if (setCpuFrequencyMhz(80))
@@ -45,11 +46,13 @@ void m5stack_begin()
     dbPrtln("CPU Freq set to: " + String(getCpuFrequencyMhz()) + " MHz");
   }
 
-  // display setup at startup
-  M5Cardputer.Display.setBrightness(0);
+  // --- display setup at startup ---------------
+  // M5Cardputer.Display.setBrightness(0);
+  // ** brightness setup at settingsInit() **
+
   M5Cardputer.Display.fillScreen(TFT_BLACK);
   M5Cardputer.Display.setRotation(1);
-  M5Cardputer.Display.setFont(&fonts::lgfxJapanGothic_16); //default japanese font
+  M5Cardputer.Display.setFont(&fonts::lgfxJapanGothic_16); // default japanese font
   M5Cardputer.Display.setTextSize(1);
   M5Cardputer.Display.setTextDatum(top_left); // character base position
   M5Cardputer.Display.setTextWrap(false);
@@ -102,13 +105,16 @@ void SDU_lobby()
 
 bool SD_begin()
 {
-  for (int i = 0; i < 10; ++i)
+  const int SD_INIT_RETRIES = 10;
+  const int SD_INIT_DELAY_MS = 500;
+
+  for (int i = 0; i < SD_INIT_RETRIES; ++i)
   {
     if (SD.begin(M5.getPin(m5::pin_name_t::sd_spi_ss), SPI2))
     {
       return true; // Success
     }
-    delay(500);
+    delay(SD_INIT_DELAY_MS);
   }
 
   dbPrtln("ERR: SD begin fail...");
@@ -120,7 +126,6 @@ void dbPrtln(String msg)
 {
 #ifdef DEBUG
   Serial.println(msg);
-  Serial.flush();
 #endif
   ;
 }
@@ -129,7 +134,6 @@ void dbPrt(String msg)
 {
 #ifdef DEBUG
   Serial.print(msg);
-  // Serial.flush();
 #endif
   ;
 }
@@ -153,26 +157,37 @@ void POWER_OFF()
   // never return
 }
 
-nvs_handle_t nvs;
 const char *NVS_SETTING = "setting";
 bool wrtNVS(const char *title, uint8_t data)
 {
-  if (ESP_OK == nvs_open(NVS_SETTING, NVS_READWRITE, &nvs))
+  nvs_handle_t nvs_handle;
+  esp_err_t err = nvs_open(NVS_SETTING, NVS_READWRITE, &nvs_handle);
+  if (err == ESP_OK)
   {
-    nvs_set_u8(nvs, title, data); // Use title directly
-    nvs_close(nvs);
+    nvs_set_u8(nvs_handle, title, data);
+    nvs_close(nvs_handle);
     return true;
+  }
+  else
+  {
+    dbPrtln("ERR: NVS open for write failed: " + String(esp_err_to_name(err)));
   }
   return false;
 }
 
 bool rdNVS(const char *title, uint8_t &data)
 {
-  if (ESP_OK == nvs_open(NVS_SETTING, NVS_READONLY, &nvs))
+  nvs_handle_t nvs_handle;
+  esp_err_t err = nvs_open(NVS_SETTING, NVS_READONLY, &nvs_handle);
+  if (err == ESP_OK)
   {
-    nvs_get_u8(nvs, title, &data); // Use title directly
-    nvs_close(nvs);
+    nvs_get_u8(nvs_handle, title, &data);
+    nvs_close(nvs_handle);
     return true;
+  }
+  else
+  {
+    dbPrtln("ERR: NVS open for read failed: " + String(esp_err_to_name(err)));
   }
   return false;
 }

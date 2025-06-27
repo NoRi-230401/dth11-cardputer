@@ -44,21 +44,32 @@ static SettingMode settingMode = SM_NONE;
 #define LOWBAT_THRESHOLD_MAX 95
 #define LOWBAT_THRESHOLD_MIN 5
 #define LANG_INIT 0 // 0:English 1:Japanese
-#define LANG_MAX 1   
+#define LANG_MAX 1
+#define BATLVL_ITEM_POS 22 // 'bat.' or '電池'
+#define BATLVL_ITEM_LEN 4
+#define BATLVL_VALUE_POS 26 // xxx
+#define BATLVL_VALUE_LEN 3
+#define BATLVL_PERCENT_POS 29 // %
+#define SETTING_DISP_POS 2    // setting display start position
 
-const int BATLVL_ITEM_POS = 22;    // 'bat.' or '電池'
-const int BATLVL_VALUE_POS = 26;   // xxx
-const int BATLVL_VALUE_LEN = 3;
-const int BATLVL_PERCENT_POS = 29; // %
+// --- Key mapping constants ---
+const char KEY_SETTING_ESCAPE = '`';
+const char KEY_SETTING_BRIGHTNESS = '1';
+const char KEY_SETTING_LOWBAT = '2';
+const char KEY_SETTING_LANG = '3';
+const char KEY_UP = ';';
+const char KEY_DOWN = '.';
+const char KEY_LEFT = ',';
+const char KEY_RIGHT = '/';
+
 const char *BATLVL_TITLE[] = {"bat.", "電池"};
-
 static uint8_t BRIGHT_LVL;       // 0 - 255 : LCD bright level
 static uint8_t LOWBAT_THRESHOLD; // 5 - 95% : LOW BATTERY Threshold level
 const char *NVM_BRIGHT_TITLE = "brt";
+
 const char *NVM_LOWBAT_TITLE = "lbat";
 const char *NVM_LANG_TITLE = "lang";
 const char *LANG[] = {"English", "日本語"};
-
 static uint8_t LANG_INDEX = 0;
 const char *meas_items[][2] = {{"Temp. ℃", "気温　℃"},
                                {"Humidity %", "湿度　％"}};
@@ -73,9 +84,9 @@ void dispBatItem();
 bool updateLang(KeyNum keyNo);
 void dispMeasItem();
 bool updateSettingValue(uint8_t &value, KeyNum keyNo, uint8_t min, uint8_t max, uint8_t step, uint8_t big_step);
-
 void dth11_sensor();
 void dispInit();
+static void loadSetting(const char *nvs_key, uint8_t &setting_variable, uint8_t default_value, uint8_t min_val, uint8_t max_val);
 void settingsInit();
 void updateFloatValueDisplay(float currentValue, float &previousValue, uint8_t lineIndex, uint8_t column, uint8_t widthChars);
 void prtTempValue(float temp_val);
@@ -178,44 +189,46 @@ void settings()
   bool setting_do = false;
   KeyNum keyNum = KN_NONE;
 
-  if (M5Cardputer.Keyboard.isKeyPressed('0')) // clear
+  // key 1 - 3 : special setting mode
+  // key `     : setting clear and escape 
+  if (M5Cardputer.Keyboard.isKeyPressed(KEY_SETTING_ESCAPE)) // clear and escape
   {
     settingMode = SM_NONE;
     setting_do = true;
   }
-  else if (M5Cardputer.Keyboard.isKeyPressed('1')) // lcd brightness
+  else if (M5Cardputer.Keyboard.isKeyPressed(KEY_SETTING_BRIGHTNESS)) // lcd brightness
   {
     settingMode = SM_BRIGHT_LEVEL;
     setting_do = true;
   }
-  else if (M5Cardputer.Keyboard.isKeyPressed('2')) // lowBattery threshold
+  else if (M5Cardputer.Keyboard.isKeyPressed(KEY_SETTING_LOWBAT)) // lowBattery threshold
   {
     settingMode = SM_LOWBAT_THRESHOLD;
     setting_do = true;
   }
-  else if (M5Cardputer.Keyboard.isKeyPressed('3')) // lowBattery threshold
+  else if (M5Cardputer.Keyboard.isKeyPressed(KEY_SETTING_LANG)) // select language
   {
     settingMode = SM_LANG;
     setting_do = true;
   }
   // -----------------------------------------------------------------------
 
-  else if (M5Cardputer.Keyboard.isKeyPressed(';')) // up
+  else if (M5Cardputer.Keyboard.isKeyPressed(KEY_UP)) // up
   {
     keyNum = KN_UP;
     setting_do = true;
   }
-  else if (M5Cardputer.Keyboard.isKeyPressed('.')) // down
+  else if (M5Cardputer.Keyboard.isKeyPressed(KEY_DOWN)) // down
   {
     keyNum = KN_DOWN;
     setting_do = true;
   }
-  else if (M5Cardputer.Keyboard.isKeyPressed(',')) // left
+  else if (M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT)) // left
   {
     keyNum = KN_LEFT;
     setting_do = true;
   }
-  else if (M5Cardputer.Keyboard.isKeyPressed('/')) // right
+  else if (M5Cardputer.Keyboard.isKeyPressed(KEY_RIGHT)) // right
   {
     keyNum = KN_RIGHT;
     setting_do = true;
@@ -259,8 +272,6 @@ void changeLang(KeyNum keyNo)
 
 void dispBatItem()
 {
-  const int BATLVL_ITEM_LEN = 4; // 'bat.' or '電池'
-
   M5Cardputer.Display.fillRect(W_CHR * BATLVL_ITEM_POS, SC_LINES[0], W_CHR * BATLVL_ITEM_LEN, H_CHR, TFT_BLACK);
   M5Cardputer.Display.setFont(&fonts::lgfxJapanMincho_16);
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
@@ -288,8 +299,6 @@ void dispMeasItem()
   // clear
   M5Cardputer.Display.fillRect(0, SC_LINES[7], X_WIDTH, H_CHR, TFT_BLACK);
 
-  // japanese GothicP font 16 size use
-  // M5Cardputer.Display.setFont(&fonts::lgfxJapanGothicP_16);
   M5Cardputer.Display.setFont(&fonts::lgfxJapanMinchoP_16);
   M5Cardputer.Display.setTextSize(1);
 
@@ -345,20 +354,6 @@ bool updateSettingValue(uint8_t &value, KeyNum keyNo, uint8_t min, uint8_t max, 
   return false; // No change
 }
 
-// void prtSetting(const char *msg, uint8_t data)
-// {
-//   // Line1 : setting display
-//   const int DISP_POS = 2; // display start position
-//   char msgBuf[30];        // message buffer
-//   snprintf(msgBuf, sizeof(msgBuf), "%s%3u", msg, data);
-//   dbPrtln(msgBuf);
-
-//   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-//   M5Cardputer.Display.setFont(&fonts::lgfxJapanMinchoP_16);
-//   M5Cardputer.Display.setTextSize(1);
-//   M5Cardputer.Display.fillRect(0, SC_LINES[1], X_WIDTH, H_CHR, TFT_BLACK); // clear L1
-//   M5Cardputer.Display.drawString(msgBuf, W_CHR * DISP_POS, SC_LINES[1]);
-// }
 void prtSetting(const char *msg, uint8_t data)
 {
   char datBuf[4]; // message buffer
@@ -369,8 +364,7 @@ void prtSetting(const char *msg, uint8_t data)
 void prtSetting(const char *msg, const char *data)
 {
   // Line1 : setting display
-  const int DISP_POS = 2; // display start position
-  char msgBuf[30];        // message buffer
+  char msgBuf[31]; // message buffer
   snprintf(msgBuf, sizeof(msgBuf), "%s%s", msg, data);
   dbPrtln(msgBuf);
 
@@ -378,7 +372,7 @@ void prtSetting(const char *msg, const char *data)
   M5Cardputer.Display.setFont(&fonts::lgfxJapanMincho_12);
   M5Cardputer.Display.setTextSize(1);
   M5Cardputer.Display.fillRect(0, SC_LINES[1], X_WIDTH, H_CHR, TFT_BLACK); // clear L1
-  M5Cardputer.Display.drawString(msgBuf, W_CHR * DISP_POS, SC_LINES[1]);
+  M5Cardputer.Display.drawString(msgBuf, W_CHR * SETTING_DISP_POS, SC_LINES[1]);
 }
 
 #define STEP_SHORT 1
@@ -442,48 +436,6 @@ void dth11_sensor()
   }
 }
 
-// void dispInit()
-// {
-//   // ---012345678901234567890123456789----
-//   // L0:-- DTH11 Sensor --    bat.---%
-//   // L1: (settings display line)
-//   // L2:
-//   // L3:
-//   // L4:
-//   // L5:
-//   // L6:
-//   // L7:   気温　℃         湿度　％
-//   // ---012345678901234567890123456789----
-
-//   M5Cardputer.Display.fillScreen(TFT_BLACK); // 画面塗り潰し
-//   // M5Cardputer.Display.setFont(&fonts::lgfxJapanMincho_12);
-//   M5Cardputer.Display.setFont(&fonts::lgfxJapanMincho_16);
-
-//   //--L0 : title--------------
-//   M5Cardputer.Display.setTextColor(TFT_SKYBLUE, TFT_BLACK);
-//   // M5Cardputer.Display.drawString(F("- DTH11 Sensor -"), 0, SC_LINES[0]);
-//   M5Cardputer.Display.drawString(F("012345678901234567890123456789"), 0, SC_LINES[0]);
-
-//   M5Cardputer.Display.setCursor(0, 0);
-//   M5Cardputer.Display.println("0");
-//   M5Cardputer.Display.println("1");
-//   M5Cardputer.Display.println("2");
-//   M5Cardputer.Display.println("3");
-//   M5Cardputer.Display.println("4");
-//   M5Cardputer.Display.println("5");
-//   M5Cardputer.Display.println("6");
-//   M5Cardputer.Display.println("7");
-//   M5Cardputer.Display.println("8");
-
-//   // L0 :Battery Level -----
-//   const int BATVAL_POS = 22; // Battery value display start position
-//   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-//   // M5Cardputer.Display.drawString(F("bat.---%"), W_CHR * BATVAL_POS, SC_LINES[0]);
-
-//   // L7 : Measuremnt items
-//   dispMeasItem();
-// }
-
 void dispInit()
 {
   // ---012345678901234567890123456789----
@@ -497,7 +449,7 @@ void dispInit()
   // L7:   気温　℃         湿度　％
   // ---012345678901234567890123456789----
 
-  M5Cardputer.Display.fillScreen(TFT_BLACK); // 画面塗り潰し
+  M5Cardputer.Display.fillScreen(TFT_BLACK); // all clear
   M5Cardputer.Display.setFont(&fonts::lgfxJapanMincho_16);
 
   //--L0 : title--------------
@@ -513,52 +465,35 @@ void dispInit()
   dispMeasItem();
 }
 
+static void loadSetting(const char *nvs_key, uint8_t &setting_variable, uint8_t default_value, uint8_t min_val, uint8_t max_val)
+{
+  uint8_t nvmData;
+  bool needs_write = false;
+
+  if (!rdNVS(nvs_key, nvmData))
+  {
+    nvmData = default_value;
+    needs_write = true;
+  }
+  else if (nvmData < min_val || nvmData > max_val)
+  {
+    nvmData = default_value;
+    needs_write = true;
+  }
+
+  setting_variable = nvmData;
+  if (needs_write)
+  {
+    wrtNVS(nvs_key, setting_variable);
+  }
+}
+
 void settingsInit()
 {
-  // LCD brightness setup
-  uint8_t nvmData;
-  if (!rdNVS(NVM_BRIGHT_TITLE, nvmData))
-  {
-    BRIGHT_LVL = BRIGHT_LVL_INIT;         // 0 - 255 : LCD bright level
-    wrtNVS(NVM_BRIGHT_TITLE, BRIGHT_LVL); // Write only if using default
-  }
-  else
-  {
-    BRIGHT_LVL = nvmData;
-  }
+  loadSetting(NVM_BRIGHT_TITLE, BRIGHT_LVL, BRIGHT_LVL_INIT, BRIGHT_LVL_MIN, BRIGHT_LVL_MAX);
   M5Cardputer.Display.setBrightness(BRIGHT_LVL);
-
-  // Low Battery Threshold setup
-  if (!rdNVS(NVM_LOWBAT_TITLE, nvmData))
-  {
-    LOWBAT_THRESHOLD = LOWBAT_THRESHOLD_INIT; // % : low battery threshold lvl
-    wrtNVS(NVM_LOWBAT_TITLE, LOWBAT_THRESHOLD);
-  }
-  else
-  {
-    if (nvmData < LOWBAT_THRESHOLD_MIN || nvmData > LOWBAT_THRESHOLD_MAX)
-    {
-      nvmData = LOWBAT_THRESHOLD_INIT;
-      wrtNVS(NVM_LOWBAT_TITLE, nvmData);
-    }
-    LOWBAT_THRESHOLD = nvmData;
-  }
-
-  // Lang
-  if (!rdNVS(NVM_LANG_TITLE, nvmData))
-  {
-    nvmData = LANG_INIT; // default english
-    wrtNVS(NVM_LANG_TITLE, nvmData);
-  }
-  else
-  {
-    if (nvmData > LANG_MAX)
-    {
-      nvmData = LANG_INIT;
-      wrtNVS(NVM_LANG_TITLE, nvmData);
-    }
-    LANG_INDEX = nvmData;
-  }
+  loadSetting(NVM_LOWBAT_TITLE, LOWBAT_THRESHOLD, LOWBAT_THRESHOLD_INIT, LOWBAT_THRESHOLD_MIN, LOWBAT_THRESHOLD_MAX);
+  loadSetting(NVM_LANG_TITLE, LANG_INDEX, LANG_INIT, 0, LANG_MAX);
 }
 
 void updateFloatValueDisplay(float currentValue, float &previousValue, uint8_t lineIndex, uint8_t column, uint8_t widthChars)
@@ -610,12 +545,13 @@ void prtHumiValue(float humi_val)
 static unsigned long PREV_BATCHK_TM = 0L;
 static uint8_t PREV_BATLVL = 255; // Use an impossible value to force the first update
 static bool batCheck_first = true;
+#define BATLVL_FLUCTUATION 5 // fluctuation
+const unsigned long BATTERY_CHECK_INTERVAL_MS = 1993UL; // Interval for battery level check
 void batteryState()
 {
-  const unsigned long BATCHK_INTVAL = 1993UL;
   unsigned long currentTime = millis(); // Get current time once
 
-  if (currentTime - PREV_BATCHK_TM < BATCHK_INTVAL)
+  if (currentTime - PREV_BATCHK_TM < BATTERY_CHECK_INTERVAL_MS)
     return;
 
   // This will update consecutiveLowBatteryCount
@@ -633,7 +569,7 @@ void batteryState()
   }
   else
   { // ** stable battery level is valid **
-    if (abs(batLvl - PREV_BATLVL) > 5)
+    if (abs(batLvl - PREV_BATLVL) > BATLVL_FLUCTUATION)
     {
       PREV_BATLVL = batLvl;
       return;
@@ -653,9 +589,9 @@ void prtBatLvl(uint8_t batLvl)
 
   if (batLvl == PREV_BATLVL_DISP)
     return;
-  PREV_BATLVL_DISP = batLvl;  
+  PREV_BATLVL_DISP = batLvl;
 
-  char msg[4]=""; // message buffer
+  char msg[4] = ""; // message buffer
   snprintf(msg, sizeof(msg), "%3u", batLvl);
   dbPrtln(msg);
 
@@ -670,7 +606,6 @@ static uint8_t consecutiveLowBatteryCount = 0;
 void lowBatteryCheck(uint8_t batLvl)
 {
   const uint8_t LOWBAT_CONSECUTIVE_READINGS = 5;
-  const int LOWBAT_DISP_COL = 45;
 
   // Update consecutive low battery count
   if (batLvl < LOWBAT_THRESHOLD)
@@ -689,11 +624,9 @@ void lowBatteryCheck(uint8_t batLvl)
   if (consecutiveLowBatteryCount >= LOWBAT_CONSECUTIVE_READINGS)
   {
     M5Cardputer.Display.fillScreen(TFT_BLACK);
-    M5Cardputer.Display.setFont(&fonts::Font4);
-    M5Cardputer.Display.setTextSize(1);
-    M5Cardputer.Display.setCursor(LOWBAT_DISP_COL, SC_LINES[3]);
     M5Cardputer.Display.setTextColor(TFT_RED, TFT_BLACK);
-    M5Cardputer.Display.print(F("Low Battery !!"));
+    M5Cardputer.Display.drawCenterString(F("Low Battery !!"), X_WIDTH / 2, Y_HEIGHT / 2, &fonts::Font4);
+
     POWER_OFF();
     // never return
   }

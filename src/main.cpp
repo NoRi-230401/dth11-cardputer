@@ -2,7 +2,7 @@
 //  *** dth11-cardputer ***     by NoRi
 //  DTH11 Senseor software for Cardputer
 // (Temperature and Humidity)
-//    2025-06-26  v105
+//    2025-06-28  v105
 // https://github.com/NoRi-230401/dth11-cardputer
 //  MIT License
 // --------------------------------------------------------
@@ -29,12 +29,12 @@ enum KeyNum
 
 enum SettingMode
 {
-  SM_NONE,
+  SM_ESC,
   SM_BRIGHT_LEVEL,
   SM_LOWBAT_THRESHOLD,
   SM_LANG
 };
-static SettingMode settingMode = SM_NONE;
+static SettingMode settingMode = SM_ESC;
 
 #define BRIGHT_LVL_INIT 30
 #define BRIGHT_LVL_MAX 255
@@ -80,10 +80,14 @@ bool keyCheck();
 void settings();
 void changeSettings(SettingMode mode, KeyNum keyNo);
 void changeLang(KeyNum keyNo);
-void dispBatItem();
 bool updateLang(KeyNum keyNo);
+void dispBatItem();
 void dispMeasItem();
 bool updateSettingValue(uint8_t &value, KeyNum keyNo, uint8_t min, uint8_t max, uint8_t step, uint8_t big_step);
+void prtSetting(const char *msg, uint8_t data);
+void prtSetting(const char *msg, const char *data);
+void changeBright(KeyNum keyNo);
+void changeLowBatThr(KeyNum keyNo);
 void dth11_sensor();
 void dispInit();
 static void loadSetting(const char *nvs_key, uint8_t &setting_variable, uint8_t default_value, uint8_t min_val, uint8_t max_val);
@@ -93,10 +97,6 @@ void prtTempValue(float temp_val);
 void prtHumiValue(float humi_val);
 void batteryState();
 void prtBatLvl(uint8_t batLvl);
-void prtSetting(const char *msg, uint8_t data);
-void prtSetting(const char *msg, const char *data);
-void changeBright(KeyNum keyNo);
-void changeLowBatThr(KeyNum keyNo);
 void lowBatteryCheck(uint8_t batLvl);
 
 void setup()
@@ -186,64 +186,62 @@ bool keyCheck()
 void settings()
 {
   // Setting Mode Check
-  bool setting_do = false;
   KeyNum keyNum = KN_NONE;
 
   // key 1 - 3 : special setting mode
-  // key `     : setting clear and escape 
+  // key `     : clear and escape special mode
   if (M5Cardputer.Keyboard.isKeyPressed(KEY_SETTING_ESCAPE)) // clear and escape
   {
-    settingMode = SM_NONE;
-    setting_do = true;
+    if (settingMode == SM_ESC)
+      return;
+    settingMode = SM_ESC;
   }
   else if (M5Cardputer.Keyboard.isKeyPressed(KEY_SETTING_BRIGHTNESS)) // lcd brightness
   {
+    if (settingMode == SM_BRIGHT_LEVEL)
+      return;
     settingMode = SM_BRIGHT_LEVEL;
-    setting_do = true;
   }
   else if (M5Cardputer.Keyboard.isKeyPressed(KEY_SETTING_LOWBAT)) // lowBattery threshold
   {
+    if (settingMode == SM_LOWBAT_THRESHOLD)
+      return;
     settingMode = SM_LOWBAT_THRESHOLD;
-    setting_do = true;
   }
   else if (M5Cardputer.Keyboard.isKeyPressed(KEY_SETTING_LANG)) // select language
   {
+    if (settingMode == SM_LANG)
+      return;
     settingMode = SM_LANG;
-    setting_do = true;
   }
   // -----------------------------------------------------------------------
-
   else if (M5Cardputer.Keyboard.isKeyPressed(KEY_UP)) // up
   {
     keyNum = KN_UP;
-    setting_do = true;
   }
   else if (M5Cardputer.Keyboard.isKeyPressed(KEY_DOWN)) // down
   {
     keyNum = KN_DOWN;
-    setting_do = true;
   }
   else if (M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT)) // left
   {
     keyNum = KN_LEFT;
-    setting_do = true;
   }
   else if (M5Cardputer.Keyboard.isKeyPressed(KEY_RIGHT)) // right
   {
     keyNum = KN_RIGHT;
-    setting_do = true;
+  }
+  else
+  {
+    return; // No relevant key pressed
   }
 
-  if (setting_do)
-  {
-    changeSettings(settingMode, keyNum);
-    return;
-  }
+  changeSettings(settingMode, keyNum);
 }
 
 void changeSettings(SettingMode mode, KeyNum keyNo)
 {
-  if (mode == SM_NONE)
+  if (mode == SM_ESC)
   {
     // clear L1 : setting display line
     M5Cardputer.Display.fillRect(0, SC_LINES[1], X_WIDTH, H_CHR, TFT_BLACK);
@@ -270,14 +268,6 @@ void changeLang(KeyNum keyNo)
   prtSetting("lang = ", LANG[LANG_INDEX]);
 }
 
-void dispBatItem()
-{
-  M5Cardputer.Display.fillRect(W_CHR * BATLVL_ITEM_POS, SC_LINES[0], W_CHR * BATLVL_ITEM_LEN, H_CHR, TFT_BLACK);
-  M5Cardputer.Display.setFont(&fonts::lgfxJapanMincho_16);
-  M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  M5Cardputer.Display.drawString(BATLVL_TITLE[LANG_INDEX], W_CHR * BATLVL_ITEM_POS, SC_LINES[0]);
-}
-
 bool updateLang(KeyNum keyNo)
 {
   switch (keyNo)
@@ -286,12 +276,20 @@ bool updateLang(KeyNum keyNo)
   case KN_DOWN:
   case KN_RIGHT:
   case KN_LEFT:
-    LANG_INDEX = (LANG_INDEX + 1) % 2;
+    LANG_INDEX = (LANG_INDEX + 1) % (LANG_MAX + 1);
     return true; // Value changed
   default:
     break;
   }
   return false; // No change
+}
+
+void dispBatItem()
+{
+  M5Cardputer.Display.fillRect(W_CHR * BATLVL_ITEM_POS, SC_LINES[0], W_CHR * BATLVL_ITEM_LEN, H_CHR, TFT_BLACK);
+  M5Cardputer.Display.setFont(&fonts::lgfxJapanMincho_16);
+  M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  M5Cardputer.Display.drawString(BATLVL_TITLE[LANG_INDEX], W_CHR * BATLVL_ITEM_POS, SC_LINES[0]);
 }
 
 void dispMeasItem()
@@ -314,44 +312,37 @@ void dispMeasItem()
 bool updateSettingValue(uint8_t &value, KeyNum keyNo, uint8_t min, uint8_t max, uint8_t step, uint8_t big_step)
 {
   int tempValue = value;
-  bool changeKey = false;
 
   switch (keyNo)
   {
   case KN_UP:
     tempValue += big_step;
-    changeKey = true;
     break;
   case KN_DOWN:
     tempValue -= big_step;
-    changeKey = true;
     break;
   case KN_RIGHT:
     tempValue += step;
-    changeKey = true;
     break;
   case KN_LEFT:
     tempValue -= step;
-    changeKey = true;
     break;
   default:
-    break;
+    return false; // Not a value-changing key
   }
 
-  if (changeKey)
+  // Clamp the value to the allowed range
+  if (tempValue > max)
+    tempValue = max;
+  if (tempValue < min)
+    tempValue = min;
+
+  if (value != (uint8_t)tempValue)
   {
-    if (tempValue > max)
-      tempValue = max;
-    if (tempValue < min)
-      tempValue = min;
-
-    if (value != (uint8_t)tempValue)
-    {
-      value = (uint8_t)tempValue;
-      return true; // Value changed
-    }
+    value = (uint8_t)tempValue;
+    return true; // Value changed
   }
-  return false; // No change
+  return false; // No change in value
 }
 
 void prtSetting(const char *msg, uint8_t data)
@@ -375,11 +366,11 @@ void prtSetting(const char *msg, const char *data)
   M5Cardputer.Display.drawString(msgBuf, W_CHR * SETTING_DISP_POS, SC_LINES[1]);
 }
 
-#define STEP_SHORT 1
-#define STEP_BIG 10
 void changeBright(KeyNum keyNo)
 {
-  if (updateSettingValue(BRIGHT_LVL, keyNo, BRIGHT_LVL_MIN, BRIGHT_LVL_MAX, STEP_SHORT, STEP_BIG))
+  const uint8_t step_short = 1;
+  const uint8_t step_big = 10;
+  if (updateSettingValue(BRIGHT_LVL, keyNo, BRIGHT_LVL_MIN, BRIGHT_LVL_MAX, step_short, step_big))
   {
     M5Cardputer.Display.setBrightness(BRIGHT_LVL);
     wrtNVS(NVM_BRIGHT_TITLE, BRIGHT_LVL);
@@ -389,7 +380,9 @@ void changeBright(KeyNum keyNo)
 
 void changeLowBatThr(KeyNum keyNo)
 {
-  if (updateSettingValue(LOWBAT_THRESHOLD, keyNo, LOWBAT_THRESHOLD_MIN, LOWBAT_THRESHOLD_MAX, STEP_SHORT, STEP_BIG))
+  const uint8_t step_short = 1;
+  const uint8_t step_big = 10;
+  if (updateSettingValue(LOWBAT_THRESHOLD, keyNo, LOWBAT_THRESHOLD_MIN, LOWBAT_THRESHOLD_MAX, step_short, step_big))
   {
     wrtNVS(NVM_LOWBAT_TITLE, LOWBAT_THRESHOLD);
   }
@@ -545,7 +538,7 @@ void prtHumiValue(float humi_val)
 static unsigned long PREV_BATCHK_TM = 0L;
 static uint8_t PREV_BATLVL = 255; // Use an impossible value to force the first update
 static bool batCheck_first = true;
-#define BATLVL_FLUCTUATION 5 // fluctuation
+#define BATLVL_FLUCTUATION 5                            // fluctuation
 const unsigned long BATTERY_CHECK_INTERVAL_MS = 1993UL; // Interval for battery level check
 void batteryState()
 {

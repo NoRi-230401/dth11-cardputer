@@ -10,7 +10,9 @@
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
-#define DHTPIN 1 // Digital pin connected to the DHT sensor
+// #define DHTPIN 1 // Digital pin connected to the DHT sensor
+#define DHTPIN 2 // Digital pin connected to the DHT sensor
+
 // Uncomment the type of sensor in use:
 #define DHTTYPE DHT11 // DHT 11
 // #define DHTTYPE    DHT22     // DHT 22 (AM2302)
@@ -535,10 +537,11 @@ void prtHumiValue(float humi_val)
   updateFloatValueDisplay(humi_val, PREV_HUMIDITY, HUMI_LINE_INDEX, HUMI_COL_INDEX, HUMI_DISP_WIDTH);
 }
 
+
+// static uint8_t PREV_BATLVL = 255; // Use an impossible value to force the first update
+// static bool batCheck_first = true;
+// #define BATLVL_FLUCTUATION 5                            // fluctuation
 static unsigned long PREV_BATCHK_TM = 0L;
-static uint8_t PREV_BATLVL = 255; // Use an impossible value to force the first update
-static bool batCheck_first = true;
-#define BATLVL_FLUCTUATION 5                            // fluctuation
 const unsigned long BATTERY_CHECK_INTERVAL_MS = 1993UL; // Interval for battery level check
 void batteryState()
 {
@@ -556,20 +559,20 @@ void batteryState()
 
   lowBatteryCheck(batLvl);
 
-  if (batCheck_first)
-  {
-    batCheck_first = false;
-  }
-  else
-  { // ** stable battery level is valid **
-    if (abs(batLvl - PREV_BATLVL) > BATLVL_FLUCTUATION)
-    {
-      PREV_BATLVL = batLvl;
-      return;
-    }
-  }
+  // if (batCheck_first)
+  // {
+  //   batCheck_first = false;
+  // }
+  // else
+  // { // ** stable battery level is valid **
+  //   if (abs(batLvl - PREV_BATLVL) > BATLVL_FLUCTUATION)
+  //   {
+  //     PREV_BATLVL = batLvl;
+  //     return;
+  //   }
+  // }
+  // PREV_BATLVL = batLvl;
 
-  PREV_BATLVL = batLvl;
   prtBatLvl(batLvl);
 }
 
@@ -586,7 +589,7 @@ void prtBatLvl(uint8_t batLvl)
 
   char msg[4] = ""; // message buffer
   snprintf(msg, sizeof(msg), "%3u", batLvl);
-  dbPrtln(msg);
+  // dbPrtln(msg);
 
   M5Cardputer.Display.fillRect(W_CHR * BATLVL_VALUE_POS, SC_LINES[0], W_CHR * BATLVL_VALUE_LEN, H_CHR, TFT_BLACK); // clear
   M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);

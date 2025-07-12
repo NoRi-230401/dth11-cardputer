@@ -16,7 +16,6 @@ int32_t W_CHR, H_CHR;      // Character dimensions
 int32_t X_WIDTH, Y_HEIGHT; // Screen dimensions
 int32_t SC_LINES[N_ROWS];  // Array to store Y coordinates of each line
 
-// #define PLATFORMIO_IDE_DEBUG
 void m5stack_begin()
 {
   auto cfg = M5.config();
@@ -26,6 +25,7 @@ void m5stack_begin()
   // cfg.output_power = false;  // Disable Grove port power output
   cfg.led_brightness = 0;
   M5Cardputer.begin(cfg, true);
+  M5Cardputer.Power.begin();
 
 #ifdef PLATFORMIO_IDE_DEBUG
   // vsCode terminal cannot get serial data
